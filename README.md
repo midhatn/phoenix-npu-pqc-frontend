@@ -174,7 +174,26 @@ phoenix-npu-pqc-frontend/
 
 ---
 
-## 6. Related Repositories & Citation
+---
+
+## 6. Hybrid PQC & QKD Hardware Roadmap (v1.1.0)
+
+As part of the upcoming **v1.1.0 release**, this suite is expanding to support **Defense-in-Depth Hybrid Post-Quantum Cryptography & Quantum Key Distribution (QKD)**:
+
+* **Standards Compliance**:
+  * **ETSI GS QKD 014 (v1.1.1 / v1.3.1)**: Standard REST API key delivery & JSON Key Container parsing (`/enc_keys`, `/dec_keys`, UUID `key_ID`).
+  * **NIST SP 800-56C Rev. 2 & NIST SP 800-227**: Two-step extraction-then-expansion Dual-Key Combiner (KMAC256 / SHAKE256).
+  * **NIST FIPS 204 (ML-DSA)**: Asymmetric authentication of QKD control plane to eliminate the classical pre-shared key dilemma.
+* **New Hardware Milestones (DR16–DR20)**:
+  * **DR16**: ETSI GS QKD 014 Key Container Parser & Sealed Ingress on AIE2 Tile (0,1).
+  * **DR17**: ML-DSA Asymmetric QKD Control Plane Authenticator on AIE2 Vector Tiles.
+  * **DR18**: NIST SP 800-56C On-Device Dual-Key Combiner ($K_{\text{Final}} = \text{KMAC256}(K_{\text{QKD}} \parallel K_{\text{PQC}})$).
+  * **DR19**: Full-Duplex Hybrid QKD-PQC Session Orchestrator & Zero-Leakage Teardown.
+  * **DR20**: QKDN Interoperability Test Suite & Master Silicon Certification.
+
+For complete technical specifications, mathematical soundness proofs, and tile mapping, refer to the **[Hybrid PQC & QKD Roadmap](https://github.com/midhatn/phoenix-npu-pqc/blob/main/docs/PQC_AND_QKD_ROADMAP.md)** in the core repository.
+
+## 7. Related Repositories & Citation
 
 This frontend is part of the **AMD Phoenix NPU Post-Quantum Cryptography Research Initiative**:
 
@@ -193,6 +212,6 @@ This frontend is part of the **AMD Phoenix NPU Post-Quantum Cryptography Researc
 
 ---
 
-## 7. License
+## 8. License
 
 Licensed under the [Apache License 2.0](LICENSE).
