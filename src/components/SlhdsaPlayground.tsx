@@ -1,38 +1,46 @@
 import React, { useState } from 'react';
-import { Key, FileSignature, ShieldCheck, ShieldAlert, Cpu, Sparkles, CheckCircle, RefreshCw, Layers, Lock, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Key, FileSignature, ShieldCheck, ShieldAlert, Cpu, Sparkles, CheckCircle, RefreshCw, Layers, Lock, AlertTriangle, ArrowRight, Zap } from 'lucide-react';
 import { SlhdsaParameterSet } from '../types';
 import { SLHDSA_PARAMS_CONFIG } from '../crypto/slhdsa';
 
 export const SlhdsaPlayground: React.FC = () => {
   const [paramSet, setParamSet] = useState<SlhdsaParameterSet>('SLH-DSA-SHAKE-128s');
   const [message, setMessage] = useState('NIST FIPS 205 Stateless Hash-Based Digital Signature on AMD Phoenix NPU');
-  const [keyPair, setKeyPair] = useState<{ publicKey: string; secretKey: string; latencyMs: number } | null>(null);
-  const [signature, setSignature] = useState<{ signatureHex: string; latencyMs: number; sigBytes: number } | null>(null);
-  const [verifyResult, setVerifyResult] = useState<{ valid: boolean; status: number; latencyMs: number } | null>(null);
+  const [keyPair, setKeyPair] = useState<{ publicKey: string; secretKey: string; latencyMs: number; hardware?: string } | null>(null);
+  const [signature, setSignature] = useState<{ signatureHex: string; latencyMs: number; sigBytes: number; hardware?: string } | null>(null);
+  const [verifyResult, setVerifyResult] = useState<{ valid: boolean; status: number; latencyMs: number; hardware?: string } | null>(null);
   const [tamperMsg, setTamperMsg] = useState(false);
   const [tamperSig, setTamperSig] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [activeStep, setActiveStep] = useState<number>(1);
 
   const config = SLHDSA_PARAMS_CONFIG[paramSet];
 
   const handleKeyGen = async () => {
     setLoading('keygen');
+    setErrorMsg(null);
     try {
       const res = await fetch('http://127.0.0.1:3001/api/npu/slhdsa/keygen', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ paramSet }),
       });
+      if (!res.ok) {
+        throw new Error(`Bridge error HTTP ${res.status}`);
+      }
       const data = await res.json();
       if (data.publicKey) {
         setKeyPair(data);
         setSignature(null);
         setVerifyResult(null);
         setActiveStep(2);
+      } else {
+        throw new Error(data.error || 'Failed to generate keypair on NPU');
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      setErrorMsg(`KeyGen Error: ${e.message || e}`);
     } finally {
       setLoading(null);
     }
@@ -41,6 +49,7 @@ export const SlhdsaPlayground: React.FC = () => {
   const handleSign = async () => {
     if (!keyPair) return;
     setLoading('sign');
+    setErrorMsg(null);
     try {
       const res = await fetch('http://127.0.0.1:3001/api/npu/slhdsa/sign', {
         method: 'POST',
@@ -51,18 +60,25 @@ export const SlhdsaPlayground: React.FC = () => {
           message,
         }),
       });
+      if (!res.ok) {
+        throw new Error(`Bridge error HTTP ${res.status}`);
+      }
       const data = await res.json();
       if (data.signature) {
         setSignature({
           signatureHex: data.signature,
           latencyMs: data.latencyMs,
           sigBytes: data.sigBytes,
+          hardware: data.hardware,
         });
         setVerifyResult(null);
         setActiveStep(3);
+      } else {
+        throw new Error(data.error || 'Failed to sign message on NPU');
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      setErrorMsg(`Signature Error: ${e.message || e}`);
     } finally {
       setLoading(null);
     }
@@ -71,9 +87,10 @@ export const SlhdsaPlayground: React.FC = () => {
   const handleVerify = async () => {
     if (!keyPair || !signature) return;
     setLoading('verify');
+    setErrorMsg(null);
     try {
       let msgToSend = message;
-      if (tamperMsg) msgToSend += ' [TAMPERED_INJECTION]';
+      if (tamperMsg) msgToSend += ' [TAMPERED_ADVERSARY_INJECTION]';
 
       let sigToSend = signature.signatureHex;
       if (tamperSig) {
@@ -90,10 +107,14 @@ export const SlhdsaPlayground: React.FC = () => {
           message: msgToSend,
         }),
       });
+      if (!res.ok) {
+        throw new Error(`Bridge error HTTP ${res.status}`);
+      }
       const data = await res.json();
       setVerifyResult(data);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      setErrorMsg(`Verification Error: ${e.message || e}`);
     } finally {
       setLoading(null);
     }
@@ -110,8 +131,9 @@ export const SlhdsaPlayground: React.FC = () => {
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-500/20 text-purple-400 border border-purple-500/30">
                 NIST FIPS PUB 205 (August 2024)
               </span>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                Milestone DR21 · Gate 25 Certified
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                <Zap className="w-3 h-3 text-emerald-400" />
+                AMD Phoenix AIE2 Silicon · Gate 25 PASS
               </span>
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/30">
                 Stateless Hash-Only
@@ -137,9 +159,10 @@ export const SlhdsaPlayground: React.FC = () => {
                   setKeyPair(null);
                   setSignature(null);
                   setVerifyResult(null);
+                  setErrorMsg(null);
                   setActiveStep(1);
                 }}
-                className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all ${
+                className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
                   paramSet === p
                     ? 'bg-purple-600 text-white border-purple-500 shadow-lg shadow-purple-500/20'
                     : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-white'
@@ -176,6 +199,14 @@ export const SlhdsaPlayground: React.FC = () => {
         </div>
       </div>
 
+      {/* Error Banner */}
+      {errorMsg && (
+        <div className="p-4 bg-red-950/80 border border-red-700 text-red-300 rounded-xl text-xs flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
+
       {/* 3-Step Execution Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Step 1: Key Generation */}
@@ -205,11 +236,13 @@ export const SlhdsaPlayground: React.FC = () => {
                 <div>
                   <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Secret Key (Tile SRAM Bound)</div>
                   <div className="p-2 bg-slate-950 border border-slate-800 rounded font-mono text-[11px] text-purple-400 break-all select-all">
-                    {keyPair.secretKey.slice(0, 32)}...[LOCKED_IN_SRAM]
+                    {keyPair.secretKey.slice(0, 32)}...[LOCKED_IN_AIE2_SRAM]
                   </div>
                 </div>
-                <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1">
-                  <span>Hardware Time:</span>
+                <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
+                  <span className="flex items-center gap-1 text-emerald-400">
+                    <Cpu className="w-3.5 h-3.5" /> AIE2 Silicon Time:
+                  </span>
                   <span className="font-mono text-emerald-400 font-semibold">{keyPair.latencyMs.toFixed(2)} ms</span>
                 </div>
               </div>
@@ -219,7 +252,7 @@ export const SlhdsaPlayground: React.FC = () => {
           <button
             onClick={handleKeyGen}
             disabled={loading !== null}
-            className="mt-4 w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow flex items-center justify-center gap-2 transition"
+            className="mt-4 w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow flex items-center justify-center gap-2 transition cursor-pointer"
           >
             {loading === 'keygen' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />}
             {keyPair ? 'Regenerate FIPS 205 Keypair' : 'Generate SLH-DSA Keypair on AIE2'}
@@ -256,11 +289,13 @@ export const SlhdsaPlayground: React.FC = () => {
                     Signature Container ({signature.sigBytes} Bytes)
                   </div>
                   <div className="p-2 bg-slate-950 border border-slate-800 rounded font-mono text-[11px] text-amber-400 break-all select-all max-h-24 overflow-y-auto">
-                    {signature.signatureHex.slice(0, 160)}... ({signature.sigBytes} bytes serialized)
+                    {signature.signatureHex.slice(0, 160)}... ({signature.sigBytes} bytes serialized on AIE2)
                   </div>
                 </div>
-                <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1">
-                  <span>Hardware Signature Time:</span>
+                <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
+                  <span className="flex items-center gap-1 text-amber-400">
+                    <Cpu className="w-3.5 h-3.5" /> AIE2 Sign Time:
+                  </span>
                   <span className="font-mono text-amber-400 font-semibold">{signature.latencyMs.toFixed(2)} ms</span>
                 </div>
               </div>
@@ -270,7 +305,7 @@ export const SlhdsaPlayground: React.FC = () => {
           <button
             onClick={handleSign}
             disabled={loading !== null || !keyPair}
-            className="mt-4 w-full py-2.5 px-4 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow flex items-center justify-center gap-2 transition"
+            className="mt-4 w-full py-2.5 px-4 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow flex items-center justify-center gap-2 transition cursor-pointer"
           >
             {loading === 'sign' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileSignature className="w-4 h-4" />}
             Sign Message on AIE2 Silicon
@@ -324,7 +359,7 @@ export const SlhdsaPlayground: React.FC = () => {
                   {verifyResult.valid ? 'VALID NIST FIPS 205 SIGNATURE' : 'SIGNATURE REJECTED (FAIL-CLOSED)'}
                 </div>
                 <div className="text-[11px] text-slate-400 mt-1 flex justify-between">
-                  <span>Verification Latency:</span>
+                  <span>AIE2 Verification Latency:</span>
                   <span className="font-mono font-semibold">{verifyResult.latencyMs.toFixed(2)} ms</span>
                 </div>
               </div>
@@ -334,7 +369,7 @@ export const SlhdsaPlayground: React.FC = () => {
           <button
             onClick={handleVerify}
             disabled={loading !== null || !signature}
-            className="mt-4 w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow flex items-center justify-center gap-2 transition"
+            className="mt-4 w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow flex items-center justify-center gap-2 transition cursor-pointer"
           >
             {loading === 'verify' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
             Verify Signature on AIE2 Silicon

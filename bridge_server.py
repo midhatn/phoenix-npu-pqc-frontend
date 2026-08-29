@@ -143,16 +143,17 @@ def get_architecture_telemetry():
     }
 
 def run_ironenv_snippet(snippet_py: str) -> dict:
-    """Execute arbitrary Python snippet inside Ironenv and parse JSON output."""
+    """Execute arbitrary Python snippet inside Ironenv via stdin with zero payload size limits."""
     if not GLOBAL_IRONENV.is_file() or not GLOBAL_PQC_REPO:
         raise RuntimeError("Hardware environment not ready: Ironenv or PQC repo missing.")
 
     proc = subprocess.run(
-        [str(GLOBAL_IRONENV), "-u", "-c", snippet_py],
+        [str(GLOBAL_IRONENV), "-u", "-"],
+        input=snippet_py,
         cwd=str(GLOBAL_PQC_REPO),
         capture_output=True,
         text=True,
-        timeout=45
+        timeout=60
     )
     if proc.returncode != 0:
         raise RuntimeError(f"Hardware execution failed (code {proc.returncode}):\n{proc.stderr}\n{proc.stdout}")
