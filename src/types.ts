@@ -1,7 +1,8 @@
-export type PqcStandard = 'fips203' | 'fips204' | 'fips202' | 'hybrid_qkd' | 'enterprise_hsm' | 'silicon_gates' | 'hardware_arch' | 'test_runner';
+export type PqcStandard = 'fips203' | 'fips204' | 'fips205' | 'fips202' | 'hybrid_qkd' | 'enterprise_hsm' | 'silicon_gates' | 'hardware_arch' | 'test_runner';
 
 export type MlkemParameterSet = 'ML-KEM-512' | 'ML-KEM-768' | 'ML-KEM-1024';
 export type MldsaParameterSet = 'ML-DSA-44' | 'ML-DSA-65' | 'ML-DSA-87';
+export type SlhdsaParameterSet = 'SLH-DSA-SHAKE-128s' | 'SLH-DSA-SHAKE-128f' | 'SLH-DSA-SHAKE-256s' | 'SLH-DSA-SHAKE-256f';
 export type KeccakFunction = 'SHA3-224' | 'SHA3-256' | 'SHA3-384' | 'SHA3-512' | 'SHAKE128' | 'SHAKE256';
 export type KeccakAlgorithm = KeccakFunction;
 

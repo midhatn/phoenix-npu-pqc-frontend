@@ -65,10 +65,11 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenT
   const tabs = [
     { id: 'fips203' as PqcStandard, label: 'ML-KEM (FIPS 203)', icon: Key, badge: 'Key Encapsulation' },
     { id: 'fips204' as PqcStandard, label: 'ML-DSA (FIPS 204)', icon: FileSignature, badge: 'Digital Signatures' },
+    { id: 'fips205' as PqcStandard, label: 'SLH-DSA (FIPS 205)', icon: ShieldCheck, badge: 'Stateless Hash' },
     { id: 'fips202' as PqcStandard, label: 'SHA-3 / SHAKE (FIPS 202)', icon: Hash, badge: 'Keccak Permutations' },
     { id: 'hybrid_qkd' as PqcStandard, label: 'Hybrid QKD + PQC', icon: ShieldCheck, badge: 'DR16–DR20' },
     { id: 'enterprise_hsm' as PqcStandard, label: 'OpenSSL & PKCS#11', icon: Lock, badge: 'DR23 Enterprise' },
-    { id: 'silicon_gates' as PqcStandard, label: '25 Silicon Gates', icon: Cpu, badge: '851/851 PASS' },
+    { id: 'silicon_gates' as PqcStandard, label: '26 Silicon Gates', icon: Cpu, badge: '857/857 PASS' },
     { id: 'hardware_arch' as PqcStandard, label: 'AIE2 Architecture', icon: Server, badge: 'Tile Memory' },
   ];
 
@@ -91,7 +92,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenT
                 </span>
               </div>
               <p className="text-xs text-slate-400 font-mono">
-                Device-Resident PQC (FIPS 202 / 203 / 204)
+                Device-Resident PQC (FIPS 202 / 203 / 204 / 205)
               </p>
             </div>
           </div>

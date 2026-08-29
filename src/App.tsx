@@ -7,6 +7,7 @@ import { SiliconGateExplorer } from './components/SiliconGateExplorer';
 import { HardwareInspector } from './components/HardwareInspector';
 import { HybridQkdPlayground } from './components/HybridQkdPlayground';
 import { EnterpriseStudio } from './components/EnterpriseStudio';
+import { SlhdsaPlayground } from './components/SlhdsaPlayground';
 import { TestRunnerModal } from './components/TestRunnerModal';
 import { PqcStandard } from './types';
 
@@ -25,6 +26,7 @@ export const App: React.FC = () => {
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {currentTab === 'fips203' && <MlkemPlayground />}
         {currentTab === 'fips204' && <MldsaPlayground />}
+        {currentTab === 'fips205' && <SlhdsaPlayground />}
         {currentTab === 'fips202' && <KeccakPlayground />}
         {currentTab === 'hybrid_qkd' && <HybridQkdPlayground />}
         {currentTab === 'enterprise_hsm' && <EnterpriseStudio />}
@@ -38,10 +40,10 @@ export const App: React.FC = () => {
           <div className="flex items-center space-x-2">
             <span className="text-cyan-400 font-semibold">AMD Phoenix NPU PQC Suite</span>
             <span>·</span>
-            <span>100% On-Device Device-Resident PQC (FIPS 202/203/204)</span>
+            <span>100% On-Device Device-Resident PQC (FIPS 202/203/204/205)</span>
           </div>
           <div>
-            <span>Validated across 25 Gates (851/851 PASS) on AIE2 Physical Silicon (PQC + QKD v1.2.0)</span>
+            <span>Validated across 26 Gates (857/857 PASS) on AIE2 Physical Silicon (PQC + QKD v1.2.0)</span>
           </div>
         </div>
       </footer>

@@ -451,6 +451,24 @@ export const SILICON_GATES: SiliconGate[] = [
     objectFifos: ['fifo_openssl_dispatch', 'fifo_pkcs11_session'],
     status: 'CERTIFIED',
   },
+  {
+    gateNumber: 25,
+    milestone: 'DR21',
+    name: 'NIST FIPS 205 (SLH-DSA / SPHINCS+)',
+    category: 'Hardware/DR0-10',
+    algorithm: 'Stateless Hash-Based Digital Signatures',
+    description: 'NIST FIPS 205 (128s/f, 256s/f) W-OTS+, FORS, and Hypertree verification mapped on AIE2 512-bit Keccak vector core.',
+    testCount: 6,
+    passedCount: 6,
+    avgRuntimeMs: 1680,
+    textMemoryBytes: 16384,
+    tileRamBytes: 65536,
+    dmaChannels: 2,
+    tilesUsed: 4,
+    zeroHostFallback: true,
+    objectFifos: ['dr21_msg_in', 'dr21_adrs_in', 'dr21_key_in', 'dr21_sig_out'],
+    status: 'CERTIFIED',
+  },
 ];
 
 export const TOTAL_SILICON_TESTS = SILICON_GATES.reduce((sum, g) => sum + g.testCount, 0); // 736

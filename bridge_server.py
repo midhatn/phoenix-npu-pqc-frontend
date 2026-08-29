@@ -193,6 +193,7 @@ GATE_SCRIPTS = [
     ("Gate 22: DR19 Hybrid QKD-PQC Session Orchestrator", "tests/pqc_device_resident/test_dr19_hybrid_session_silicon.py"),
     ("Gate 23: DR27 QRNG-OPENAPI & Entropy Reservoir", "tests/pqc_device_resident/test_dr27_qrng_reservoir_silicon.py"),
     ("Gate 24: DR23 OpenSSL 3.x Provider & PKCS#11 HSM", "tests/pqc_device_resident/test_dr23_openssl_provider_silicon.py"),
+    ("Gate 25: DR21 NIST FIPS 205 (SLH-DSA / SPHINCS+)", "tests/pqc_device_resident/test_dr21_slhdsa_silicon.py"),
 ]
 
 class PqcBridgeHandler(http.server.BaseHTTPRequestHandler):
@@ -273,6 +274,12 @@ class PqcBridgeHandler(http.server.BaseHTTPRequestHandler):
                 resp = self.dispatch_mldsa_sign(req_data)
             elif path == "/api/npu/mldsa/verify":
                 resp = self.dispatch_mldsa_verify(req_data)
+            elif path == "/api/npu/slhdsa/keygen":
+                resp = self.dispatch_slhdsa_keygen(req_data)
+            elif path == "/api/npu/slhdsa/sign":
+                resp = self.dispatch_slhdsa_sign(req_data)
+            elif path == "/api/npu/slhdsa/verify":
+                resp = self.dispatch_slhdsa_verify(req_data)
             elif path == "/api/npu/keccak/hash":
                 resp = self.dispatch_keccak_hash(req_data)
             elif path == "/api/npu/zeroize":
@@ -291,6 +298,14 @@ class PqcBridgeHandler(http.server.BaseHTTPRequestHandler):
                 resp = self.dispatch_qrng_drain(req_data)
             elif path == "/api/npu/qrng/zeroize":
                 resp = self.dispatch_qrng_zeroize(req_data)
+            elif path == "/api/npu/pkcs11/login":
+                resp = self.dispatch_pkcs11_login(req_data)
+            elif path == "/api/npu/pkcs11/keygen":
+                resp = self.dispatch_pkcs11_keygen(req_data)
+            elif path == "/api/npu/pkcs11/sign":
+                resp = self.dispatch_pkcs11_sign(req_data)
+            elif path == "/api/npu/pkcs11/zeroize":
+                resp = self.dispatch_pkcs11_zeroize(req_data)
             else:
                 self.send_response(404)
                 self.send_cors_headers()
@@ -962,6 +977,87 @@ params["kem_algorithms"] = [a["algorithm"] for a in prov.query_operation(OSSL_OP
 params["signature_algorithms"] = [a["algorithm"] for a in prov.query_operation(OSSL_OP_SIGNATURE)]
 params["keymgmt_algorithms"] = [a["algorithm"] for a in prov.query_operation(OSSL_OP_KEYMGMT)]
 print(json.dumps(params))
+"""
+        return run_ironenv_snippet(snippet)
+
+    
+    # =========================================================================
+    # NIST FIPS 205 (SLH-DSA) Dispatch Routines
+    # =========================================================================
+    def dispatch_slhdsa_keygen(self, req: dict) -> dict:
+        param_set = req.get("param_set") or req.get("paramSet") or "SLH-DSA-SHAKE-128s"
+        snippet = f"""
+import sys, json, time
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+from phoenix_sdr_dsp.pqc import dr21_slhdsa_graph as slhdsa
+
+pk, sk, dt = slhdsa.slhdsa_keygen_on_aie2('{param_set}')
+out = {{
+    "publicKey": pk.hex(),
+    "secretKey": sk.hex(),
+    "publicKeyHex": pk.hex(),
+    "secretKeyHex": sk.hex(),
+    "latencyMs": round(dt, 2),
+    "executionTimeMs": round(dt, 2),
+    "paramSet": '{param_set}',
+    "hardware": "AMD Phoenix AIE2 Hardware",
+    "hardware_execution": True
+}}
+print(json.dumps(out))
+"""
+        return run_ironenv_snippet(snippet)
+
+    def dispatch_slhdsa_sign(self, req: dict) -> dict:
+        param_set = req.get("param_set") or req.get("paramSet") or "SLH-DSA-SHAKE-128s"
+        sk_hex = req.get("secretKey") or req.get("secretKeyHex") or ""
+        msg = (req.get("message") or "NIST FIPS 205 Payload").encode("utf-8")
+        msg_hex = msg.hex()
+        snippet = f"""
+import sys, json, time
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+from phoenix_sdr_dsp.pqc import dr21_slhdsa_graph as slhdsa
+
+sk = bytes.fromhex('{sk_hex}')
+msg = bytes.fromhex('{msg_hex}')
+sig, dt = slhdsa.slhdsa_sign_on_aie2('{param_set}', sk, msg)
+out = {{
+    "signature": sig.hex(),
+    "signatureHex": sig.hex(),
+    "sig_hex": sig.hex(),
+    "latencyMs": round(dt, 2),
+    "executionTimeMs": round(dt, 2),
+    "sigBytes": len(sig),
+    "hardware": "AMD Phoenix AIE2 Hardware",
+    "hardware_execution": True
+}}
+print(json.dumps(out))
+"""
+        return run_ironenv_snippet(snippet)
+
+    def dispatch_slhdsa_verify(self, req: dict) -> dict:
+        param_set = req.get("param_set") or req.get("paramSet") or "SLH-DSA-SHAKE-128s"
+        pk_hex = req.get("publicKey") or req.get("publicKeyHex") or ""
+        sig_hex = req.get("signature") or req.get("signatureHex") or ""
+        msg = (req.get("message") or "NIST FIPS 205 Payload").encode("utf-8")
+        msg_hex = msg.hex()
+        snippet = f"""
+import sys, json, time
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+from phoenix_sdr_dsp.pqc import dr21_slhdsa_graph as slhdsa
+
+pk = bytes.fromhex('{pk_hex}')
+sig = bytes.fromhex('{sig_hex}')
+msg = bytes.fromhex('{msg_hex}')
+valid, status, dt = slhdsa.slhdsa_verify_on_aie2('{param_set}', pk, msg, sig)
+out = {{
+    "valid": bool(valid),
+    "status": int(status),
+    "latencyMs": round(dt, 2),
+    "executionTimeMs": round(dt, 2),
+    "hardware": "AMD Phoenix AIE2 Hardware",
+    "hardware_execution": True
+}}
+print(json.dumps(out))
 """
         return run_ironenv_snippet(snippet)
 
