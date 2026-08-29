@@ -6,6 +6,7 @@ import { KeccakPlayground } from './components/KeccakPlayground';
 import { SiliconGateExplorer } from './components/SiliconGateExplorer';
 import { HardwareInspector } from './components/HardwareInspector';
 import { HybridQkdPlayground } from './components/HybridQkdPlayground';
+import { EnterpriseStudio } from './components/EnterpriseStudio';
 import { TestRunnerModal } from './components/TestRunnerModal';
 import { PqcStandard } from './types';
 
@@ -26,6 +27,7 @@ export const App: React.FC = () => {
         {currentTab === 'fips204' && <MldsaPlayground />}
         {currentTab === 'fips202' && <KeccakPlayground />}
         {currentTab === 'hybrid_qkd' && <HybridQkdPlayground />}
+        {currentTab === 'enterprise_hsm' && <EnterpriseStudio />}
         {currentTab === 'silicon_gates' && <SiliconGateExplorer />}
         {currentTab === 'hardware_arch' && <HardwareInspector />}
       </main>
