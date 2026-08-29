@@ -1,3 +1,10 @@
+# Node / Frontend
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.local
+
 # Python
 __pycache__/
 *.pyc
@@ -21,7 +28,6 @@ ironenv/
 *.exe
 *.mlir
 *.btr
-*.json
 *.insts.txt
 aiecc_failure_*
 aiecc_repeater_*
@@ -36,11 +42,9 @@ Release/
 x64/
 x86/
 build/
-dist/
 audit/
 captures/
 results/
-# Timestamped reports written by scripts/validate_clean_clone.ps1.
 release-evidence/
 .DS_Store
 Thumbs.db
@@ -54,18 +58,6 @@ third_party/
 # Local sync helper (not tracked)
 sync.ps1
 
-# Local scratch dirs used during M17 kernel bring-up (Peano sanity compiles)
+# Local scratch dirs
 _scratch_*/
-
-# Local backup files created during in-place kernel patching
 *.pre-v3b-patch.bak
-
-# NIST ACVP-Server KAT vectors for Post-Quantum Cryptography reference tests.
-# The global *.json rule above must NOT hide these -- they are required by the
-# M32e ML-KEM composer test and the M33d/M33e ML-DSA composer tests to
-# reproduce 33/33 silicon PASS. See docs/PQC_COMPLETE_V1.md.
-!tests/m32_mlkem/vectors/*.json
-!tests/m33_mldsa/vectors/*.json
-!tests/pqc_device_resident/data/*.json
-# The protected DR2 forensic capture includes one required raw byte stream.
-!docs/pqc_dr2_evidence_20260818/PQC_DR2D_W0_token_tap_tcId01_raw_20260818.bin
