@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Key, FileSignature, ShieldCheck, ShieldAlert, Cpu, Sparkles, CheckCircle, RefreshCw, Layers, Lock, AlertTriangle, ArrowRight, Zap } from 'lucide-react';
+import { Key, FileSignature, ShieldCheck, ShieldAlert, Cpu, Sparkles, CheckCircle, RefreshCw, Layers, Lock, AlertTriangle, ArrowRight, Zap, Bug, CheckCheck } from 'lucide-react';
 import { SlhdsaParameterSet } from '../types';
 import { SLHDSA_PARAMS_CONFIG } from '../crypto/slhdsa';
 
@@ -8,7 +8,7 @@ export const SlhdsaPlayground: React.FC = () => {
   const [message, setMessage] = useState('NIST FIPS 205 Stateless Hash-Based Digital Signature on AMD Phoenix NPU');
   const [keyPair, setKeyPair] = useState<{ publicKey: string; secretKey: string; latencyMs: number; hardware?: string } | null>(null);
   const [signature, setSignature] = useState<{ signatureHex: string; latencyMs: number; sigBytes: number; hardware?: string } | null>(null);
-  const [verifyResult, setVerifyResult] = useState<{ valid: boolean; status: number; latencyMs: number; hardware?: string } | null>(null);
+  const [verifyResult, setVerifyResult] = useState<{ valid: boolean; status: number; latencyMs: number; hardware?: string; wasTampered?: boolean } | null>(null);
   const [tamperMsg, setTamperMsg] = useState(false);
   const [tamperSig, setTamperSig] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
@@ -90,6 +90,7 @@ export const SlhdsaPlayground: React.FC = () => {
     setErrorMsg(null);
     try {
       let msgToSend = message;
+      const isTampered = tamperMsg || tamperSig;
       if (tamperMsg) msgToSend += ' [TAMPERED_ADVERSARY_INJECTION]';
 
       let sigToSend = signature.signatureHex;
@@ -111,7 +112,10 @@ export const SlhdsaPlayground: React.FC = () => {
         throw new Error(`Bridge error HTTP ${res.status}`);
       }
       const data = await res.json();
-      setVerifyResult(data);
+      setVerifyResult({
+        ...data,
+        wasTampered: isTampered,
+      });
     } catch (e: any) {
       console.error(e);
       setErrorMsg(`Verification Error: ${e.message || e}`);
@@ -323,13 +327,16 @@ export const SlhdsaPlayground: React.FC = () => {
                 Silicon Signature Verification
               </span>
               {verifyResult && (
-                verifyResult.valid ? <ShieldCheck className="w-4 h-4 text-emerald-400" /> : <ShieldAlert className="w-4 h-4 text-red-400" />
+                verifyResult.valid ? <ShieldCheck className="w-4 h-4 text-emerald-400" /> : <ShieldAlert className="w-4 h-4 text-amber-400" />
               )}
             </div>
 
             {/* Tamper Controls */}
             <div className="space-y-2 bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-xs">
-              <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Adversary Attack Simulation:</div>
+              <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold flex items-center gap-1">
+                <Bug className="w-3 h-3 text-amber-400" />
+                Adversary Attack / Tamper Injection Test:
+              </div>
               <label className="flex items-center gap-2 text-slate-300 cursor-pointer">
                 <input
                   type="checkbox"
@@ -350,17 +357,50 @@ export const SlhdsaPlayground: React.FC = () => {
               </label>
             </div>
 
+            {/* Verification Result Card */}
             {verifyResult && (
               <div className={`p-3 rounded-lg border ${
-                verifyResult.valid ? 'bg-emerald-950/40 border-emerald-700/50 text-emerald-300' : 'bg-red-950/40 border-red-700/50 text-red-300'
+                verifyResult.valid
+                  ? 'bg-emerald-950/40 border-emerald-700/50 text-emerald-300'
+                  : verifyResult.wasTampered
+                  ? 'bg-emerald-950/30 border-emerald-600/50 text-emerald-300'
+                  : 'bg-red-950/40 border-red-700/50 text-red-300'
               }`}>
-                <div className="flex items-center gap-2 font-bold text-xs">
-                  {verifyResult.valid ? <ShieldCheck className="w-4 h-4 text-emerald-400" /> : <ShieldAlert className="w-4 h-4 text-red-400" />}
-                  {verifyResult.valid ? 'VALID NIST FIPS 205 SIGNATURE' : 'SIGNATURE REJECTED (FAIL-CLOSED)'}
-                </div>
-                <div className="text-[11px] text-slate-400 mt-1 flex justify-between">
+                {verifyResult.valid ? (
+                  <div>
+                    <div className="flex items-center gap-2 font-bold text-xs text-emerald-400">
+                      <ShieldCheck className="w-4 h-4" />
+                      SIGNATURE VALID (NIST FIPS 205 OK)
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-1">
+                      Integrity and Merkle root verified on AIE2 hardware.
+                    </div>
+                  </div>
+                ) : verifyResult.wasTampered ? (
+                  <div>
+                    <div className="flex items-center gap-2 font-bold text-xs text-emerald-400">
+                      <CheckCheck className="w-4 h-4 text-emerald-400" />
+                      TAMPER TEST PASSED: ATTACK THWARTED
+                    </div>
+                    <div className="text-[11px] text-emerald-300/80 mt-1">
+                      Hardware fail-closed invariant held: Tampered signature correctly rejected by NPU.
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="flex items-center gap-2 font-bold text-xs text-red-400">
+                      <ShieldAlert className="w-4 h-4" />
+                      SIGNATURE REJECTED (FAIL-CLOSED)
+                    </div>
+                    <div className="text-[11px] text-red-300/80 mt-1">
+                      Hash or key mismatch detected during silicon verification.
+                    </div>
+                  </div>
+                )}
+
+                <div className="text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-800 flex justify-between">
                   <span>AIE2 Verification Latency:</span>
-                  <span className="font-mono font-semibold">{verifyResult.latencyMs.toFixed(2)} ms</span>
+                  <span className="font-mono font-semibold text-white">{verifyResult.latencyMs.toFixed(2)} ms</span>
                 </div>
               </div>
             )}
