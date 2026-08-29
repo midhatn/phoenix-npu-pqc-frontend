@@ -41,7 +41,8 @@ export const SiliconGateExplorer: React.FC = () => {
 
       if (reader) {
         let buffer = '';
-        while (true) {
+        let isDone = false;
+        while (!isDone) {
           const { done, value } = await reader.read();
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
@@ -57,19 +58,30 @@ export const SiliconGateExplorer: React.FC = () => {
                 }
                 if (data.error) {
                   setGateLogs((prev) => [...prev, `[ERROR] ${data.error}`]);
+                  isDone = true;
+                  break;
                 }
-                if (data.passed || (data.status && data.status.includes('PASS'))) {
-                  setGateLogs((prev) => [
-                    ...prev,
-                    `--------------------------------------------------------------------------------`,
-                    `[PASS] Gate ${gateIdx} passed all ${gate.testCount} test cases on physical AIE2 silicon!`,
-                  ]);
+                if (data.passed !== undefined || data.done || (data.status && data.status.includes('PASS'))) {
+                  if (data.passed !== undefined || (data.status && data.status.includes('PASS'))) {
+                    setGateLogs((prev) => [
+                      ...prev,
+                      `--------------------------------------------------------------------------------`,
+                      `[PASS] Gate ${gateIdx} passed all ${gate.testCount} test cases on physical AIE2 silicon!`,
+                    ]);
+                  }
+                  isDone = true;
+                  break;
                 }
               } catch {
                 // Fallback
               }
             }
           }
+        }
+        try {
+          await reader.cancel();
+        } catch {
+          // Reader cancel error ignored
         }
       }
     } catch (err: any) {

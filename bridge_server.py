@@ -30,7 +30,7 @@ import uuid
 from pathlib import Path
 
 PORT = 3001
-HOST = "127.0.0.1"
+HOST = "0.0.0.0"
 CURRENT_DIR = Path(__file__).resolve().parent
 
 def find_pqc_repo(custom_path=None) -> Path | None:
@@ -108,8 +108,8 @@ def check_npu_hardware():
         "ironenv_ready": GLOBAL_IRONENV.is_file(),
         "pqc_repo_path": str(GLOBAL_PQC_REPO) if GLOBAL_PQC_REPO else "NOT_FOUND",
         "pqc_repo_ready": GLOBAL_PQC_REPO is not None,
-        "gates_certified": 23,
-        "test_cases_total": 839,
+        "gates_certified": 25,
+        "test_cases_total": 851,
         "bridge_version": "1.3.1",
         "status": "ONLINE"
     }
@@ -752,15 +752,19 @@ print(json.dumps(out))
         self.send_cors_headers()
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Cache-Control", "no-cache")
-        self.send_header("Connection", "keep-alive")
+        self.send_header("Connection", "close")
         self.end_headers()
+        self.wfile.flush()
 
         if gate_idx < 0 or gate_idx >= len(GATE_SCRIPTS):
             self.send_sse_event("error", {"error": f"Invalid gate index {gate_idx}"})
+            self.close_connection = True
             return
 
         gate_name, script_rel = GATE_SCRIPTS[gate_idx]
         self.run_script_stream(gate_name, script_rel, gate_idx=gate_idx)
+        self.send_sse_event("gate_finish", {"gateIndex": gate_idx, "done": True})
+        self.close_connection = True
 
     def handle_silicon_suite_stream(self):
         self.send_response(200)
@@ -769,6 +773,7 @@ print(json.dumps(out))
         self.send_header("Cache-Control", "no-cache")
         self.send_header("Connection", "keep-alive")
         self.end_headers()
+        self.wfile.flush()
 
         self.send_sse_event("start_suite", {
             "totalGates": len(GATE_SCRIPTS),
@@ -1002,7 +1007,6 @@ def main():
     print(f"[*] Server Listening: http://{HOST}:{args.port}")
     print("=" * 70)
 
-    http.server.ThreadingHTTPServer.allow_reuse_address = True
     server = http.server.ThreadingHTTPServer((HOST, args.port), PqcBridgeHandler)
     server.serve_forever()
 
