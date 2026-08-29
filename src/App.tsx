@@ -8,6 +8,8 @@ import { HardwareInspector } from './components/HardwareInspector';
 import { HybridQkdPlayground } from './components/HybridQkdPlayground';
 import { EnterpriseStudio } from './components/EnterpriseStudio';
 import { SlhdsaPlayground } from './components/SlhdsaPlayground';
+import { Aie2DataflowVisualizer } from './components/Aie2DataflowVisualizer';
+import { PkiTlsStudio } from './components/PkiTlsStudio';
 import { TestRunnerModal } from './components/TestRunnerModal';
 import { PqcStandard } from './types';
 
@@ -30,6 +32,8 @@ export const App: React.FC = () => {
         {currentTab === 'fips202' && <KeccakPlayground />}
         {currentTab === 'hybrid_qkd' && <HybridQkdPlayground />}
         {currentTab === 'enterprise_hsm' && <EnterpriseStudio />}
+        {currentTab === 'pki_tls' && <PkiTlsStudio />}
+        {currentTab === 'dataflow_vis' && <Aie2DataflowVisualizer />}
         {currentTab === 'silicon_gates' && <SiliconGateExplorer />}
         {currentTab === 'hardware_arch' && <HardwareInspector />}
       </main>

@@ -280,6 +280,12 @@ class PqcBridgeHandler(http.server.BaseHTTPRequestHandler):
                 resp = self.dispatch_slhdsa_sign(req_data)
             elif path == "/api/npu/slhdsa/verify":
                 resp = self.dispatch_slhdsa_verify(req_data)
+            elif path == "/api/npu/pki/generate-ca":
+                resp = self.dispatch_pki_generate_ca(req_data)
+            elif path == "/api/npu/pki/issue-cert":
+                resp = self.dispatch_pki_issue_cert(req_data)
+            elif path == "/api/npu/tls/handshake-simulate":
+                resp = self.dispatch_tls_handshake_simulate(req_data)
             elif path == "/api/npu/keccak/hash":
                 resp = self.dispatch_keccak_hash(req_data)
             elif path == "/api/npu/zeroize":
@@ -1058,6 +1064,73 @@ out = {{
     "hardware_execution": True
 }}
 print(json.dumps(out))
+"""
+        return run_ironenv_snippet(snippet)
+
+    
+    # =========================================================================
+    # Milestone DR32: Post-Quantum PKI & TLS 1.3 Dispatch Routines
+    # =========================================================================
+    def dispatch_pki_generate_ca(self, req: dict) -> dict:
+        subject_cn = req.get("subject_cn") or req.get("subject") or "Phoenix Sovereign Root CA"
+        algo = req.get("algorithm") or "ML-DSA-65"
+        days = int(req.get("validity_days") or 365)
+        snippet = f"""
+import sys, json
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+from phoenix_sdr_dsp.pqc import dr32_pki_tls_abi as pki
+
+ca = pki.generate_pq_x509_certificate('{subject_cn}', algorithm='{algo}', is_ca=True, validity_days={days})
+print(json.dumps(ca))
+"""
+        return run_ironenv_snippet(snippet)
+
+    def dispatch_pki_issue_cert(self, req: dict) -> dict:
+        subject_cn = req.get("subject_cn") or req.get("subject") or "server.internal"
+        algo = req.get("algorithm") or "ML-DSA-65"
+        issuer_cert = req.get("issuer_cert") or {}
+        issuer_cn = issuer_cert.get("subject") or "Root CA"
+        issuer_sk_hex = req.get("issuer_sk_hex") or issuer_cert.get("secret_key_hex") or ""
+        san_list = req.get("san") or [subject_cn]
+        days = int(req.get("validity_days") or 365)
+        san_joined = ",".join(san_list)
+        
+        snippet = f"""
+import sys, json
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+from phoenix_sdr_dsp.pqc import dr32_pki_tls_abi as pki
+
+cert = pki.generate_pq_x509_certificate(
+    '{subject_cn}',
+    algorithm='{algo}',
+    is_ca=False,
+    issuer_cert={{'subject': '{issuer_cn}'}},
+    issuer_sk_hex='{issuer_sk_hex}',
+    san_list='{san_joined}'.split(','),
+    validity_days={days}
+)
+print(json.dumps(cert))
+"""
+        return run_ironenv_snippet(snippet)
+
+    def dispatch_tls_handshake_simulate(self, req: dict) -> dict:
+        server_cn = req.get("server_cn") or "secure.sovereign.gateway"
+        kem_group = req.get("kem_group") or "X25519MLKEM768"
+        sig_algo = req.get("sig_algorithm") or "ML-DSA-65"
+        qkd_enabled = bool(req.get("qkd_enabled", True))
+
+        snippet = f"""
+import sys, json
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+from phoenix_sdr_dsp.pqc import dr32_pki_tls_abi as pki
+
+res = pki.simulate_tls13_pq_handshake(
+    server_cn='{server_cn}',
+    kem_group='{kem_group}',
+    sig_algorithm='{sig_algo}',
+    qkd_enabled={qkd_enabled}
+)
+print(json.dumps(res))
 """
         return run_ironenv_snippet(snippet)
 

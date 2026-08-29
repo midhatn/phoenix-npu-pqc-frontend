@@ -1,4 +1,4 @@
-export type PqcStandard = 'fips203' | 'fips204' | 'fips205' | 'fips202' | 'hybrid_qkd' | 'enterprise_hsm' | 'silicon_gates' | 'hardware_arch' | 'test_runner';
+export type PqcStandard = 'fips203' | 'fips204' | 'fips205' | 'fips202' | 'hybrid_qkd' | 'enterprise_hsm' | 'pki_tls' | 'dataflow_vis' | 'silicon_gates' | 'hardware_arch' | 'test_runner';
 
 export type MlkemParameterSet = 'ML-KEM-512' | 'ML-KEM-768' | 'ML-KEM-1024';
 export type MldsaParameterSet = 'ML-DSA-44' | 'ML-DSA-65' | 'ML-DSA-87';

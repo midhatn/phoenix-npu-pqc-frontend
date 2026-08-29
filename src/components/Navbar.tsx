@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Cpu, ShieldCheck, Key, FileSignature, Hash, Terminal, Server, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
+import { Cpu, ShieldCheck, Activity, Globe, Key, FileSignature, Hash, Terminal, Server, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import { PqcStandard } from '../types';
 
 interface NavbarProps {
@@ -69,6 +69,8 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenT
     { id: 'fips202' as PqcStandard, label: 'SHA-3 / SHAKE (FIPS 202)', icon: Hash, badge: 'Keccak Permutations' },
     { id: 'hybrid_qkd' as PqcStandard, label: 'Hybrid QKD + PQC', icon: ShieldCheck, badge: 'DR16–DR20' },
     { id: 'enterprise_hsm' as PqcStandard, label: 'OpenSSL & PKCS#11', icon: Lock, badge: 'DR23 Enterprise' },
+    { id: 'pki_tls' as PqcStandard, label: 'PKI & TLS 1.3', icon: Globe, badge: 'DR32 X.509' },
+    { id: 'dataflow_vis' as PqcStandard, label: 'AIE2 Dataflow', icon: Activity, badge: 'DR31 Live' },
     { id: 'silicon_gates' as PqcStandard, label: '26 Silicon Gates', icon: Cpu, badge: '857/857 PASS' },
     { id: 'hardware_arch' as PqcStandard, label: 'AIE2 Architecture', icon: Server, badge: 'Tile Memory' },
   ];
