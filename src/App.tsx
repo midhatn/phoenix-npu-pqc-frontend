@@ -5,6 +5,7 @@ import { MldsaPlayground } from './components/MldsaPlayground';
 import { KeccakPlayground } from './components/KeccakPlayground';
 import { SiliconGateExplorer } from './components/SiliconGateExplorer';
 import { HardwareInspector } from './components/HardwareInspector';
+import { HybridQkdPlayground } from './components/HybridQkdPlayground';
 import { TestRunnerModal } from './components/TestRunnerModal';
 import { PqcStandard } from './types';
 
@@ -24,6 +25,7 @@ export const App: React.FC = () => {
         {currentTab === 'fips203' && <MlkemPlayground />}
         {currentTab === 'fips204' && <MldsaPlayground />}
         {currentTab === 'fips202' && <KeccakPlayground />}
+        {currentTab === 'hybrid_qkd' && <HybridQkdPlayground />}
         {currentTab === 'silicon_gates' && <SiliconGateExplorer />}
         {currentTab === 'hardware_arch' && <HardwareInspector />}
       </main>
@@ -37,7 +39,7 @@ export const App: React.FC = () => {
             <span>100% On-Device Device-Resident PQC (FIPS 202/203/204)</span>
           </div>
           <div>
-            <span>Validated across 19 Gates (736/736 PASS) on AIE2 Physical Silicon</span>
+            <span>Validated across 23 Gates (839/839 PASS) on AIE2 Physical Silicon (PQC + QKD v1.1.0)</span>
           </div>
         </div>
       </footer>

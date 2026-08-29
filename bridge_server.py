@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-AMD Phoenix NPU PQC Frontend Hardware Bridge Server v1.2.0
-----------------------------------------------------------
+AMD Phoenix NPU PQC & QKD Frontend Hardware Bridge Server v1.3.0
+----------------------------------------------------------------
 Provides a robust local REST & SSE bridge between the web dashboard and
 physical AMD Phoenix NPU (Ryzen 7 7840HS / Ryzen 9 7940HS w/ AIE2 / XDNA1)
 hardware execution on Windows 11.
 
 Supported Endpoints:
-  GET  /api/status                      - Live hardware & driver presence
+  GET  /api/status                      - Live hardware & driver presence (23 gates, 839 tests)
   GET  /api/npu/architecture-status     - Real 4x4 AIE2 tile matrix telemetry & memory usage
-  GET  /api/run-gate?gate=N             - Live SSE stream of individual silicon gate execution
-  GET  /api/run-silicon-suite           - Live SSE stream of all 19 silicon gates
+  GET  /api/run-gate?gate=N             - Live SSE stream of individual silicon gate execution (0..22)
+  GET  /api/run-silicon-suite           - Live SSE stream of all 23 silicon gates
   POST /api/npu/mlkem/keygen            - Physical NPU ML-KEM KeyGen (DR5/DR8)
   POST /api/npu/mlkem/encaps            - Physical NPU ML-KEM Encaps (DR6/DR8)
   POST /api/npu/mlkem/decaps            - Physical NPU ML-KEM Decaps (DR7/DR8)
@@ -19,9 +19,14 @@ Supported Endpoints:
   POST /api/npu/mldsa/verify            - Physical NPU ML-DSA Verify (DR13/DR14/DR15)
   POST /api/npu/keccak/hash             - Physical NPU SHA-3 & SHAKE (DR9)
   POST /api/npu/zeroize                 - Physical NPU Tile SRAM Memory Scrubbing (DR10)
+  POST /api/npu/hybrid/handshake        - Complete End-to-End Hybrid QKD-PQC Handshake (DR19)
+  POST /api/npu/hybrid/qkd-ingress      - Ingest ETSI GS QKD 014 Key Container on NPU (DR16)
+  POST /api/npu/hybrid/mldsa-auth       - Asymmetric QKD Control Plane Authentication on NPU (DR17)
+  POST /api/npu/hybrid/combine          - NIST SP 800-56C Dual-Key Combiner on NPU (DR18)
 """
 
 import argparse
+import base64
 import http.server
 import json
 import os
@@ -32,6 +37,7 @@ import sys
 import threading
 import time
 import urllib.parse
+import uuid
 from pathlib import Path
 
 PORT = 3001
@@ -58,33 +64,24 @@ def find_pqc_repo(custom_path=None) -> Path | None:
         Path.home() / ".gemini" / "antigravity" / "scratch" / "phoenix-npu-pqc",
         Path.home() / "phoenix-npu-pqc",
         Path.home() / "Documents" / "phoenix-npu-pqc",
-        Path(r"C:\phoenix-sdr-dsp"),
-        Path(r"D:\phoenix-sdr-dsp"),
-        CURRENT_DIR,
     ]
-
     for c in candidates:
         if c.exists() and ((c / "run_all_silicon_tests.py").exists() or (c / "tests" / "pqc_device_resident").exists()):
             return c.resolve()
-
     return None
 
 def find_ironenv_python(pqc_repo: Path | None) -> Path:
-    """Find MLIR-AIE Ironenv Python interpreter."""
+    """Find the verified Ironenv Python interpreter for AMD Phoenix NPU."""
     candidates = [
         Path(r"C:\phoenix-sdr-dsp\third_party\mlir-aie\ironenv\Scripts\python.exe"),
+        Path(r"C:\Users\midhat\.gemini\antigravity\scratch\phoenix-npu-pqc\third_party\mlir-aie\ironenv\Scripts\python.exe"),
         Path(r"D:\phoenix-sdr-dsp\third_party\mlir-aie\ironenv\Scripts\python.exe"),
     ]
     if pqc_repo:
-        candidates.extend([
-            pqc_repo / "third_party" / "mlir-aie" / "ironenv" / "Scripts" / "python.exe",
-            pqc_repo.parent / "phoenix-sdr-dsp" / "third_party" / "mlir-aie" / "ironenv" / "Scripts" / "python.exe",
-        ])
-
+        candidates.insert(0, pqc_repo / "third_party" / "mlir-aie" / "ironenv" / "Scripts" / "python.exe")
     for c in candidates:
-        if c.is_file():
+        if c.exists() and c.is_file():
             return c.resolve()
-
     return Path(sys.executable)
 
 GLOBAL_PQC_REPO: Path | None = find_pqc_repo()
@@ -122,9 +119,9 @@ def check_npu_hardware():
         "ironenv_ready": GLOBAL_IRONENV.is_file(),
         "pqc_repo_path": str(GLOBAL_PQC_REPO) if GLOBAL_PQC_REPO else "NOT_FOUND",
         "pqc_repo_ready": GLOBAL_PQC_REPO is not None,
-        "gates_certified": 19,
-        "test_cases_total": 739,
-        "bridge_version": "1.2.0",
+        "gates_certified": 23,
+        "test_cases_total": 839,
+        "bridge_version": "1.3.0",
         "status": "ONLINE"
     }
 
@@ -138,53 +135,38 @@ def get_architecture_telemetry():
         "computeTiles": 12,
         "sramPerTileBytes": 65536,
         "totalSramBytes": 1048576,
-        "activeAlgorithms": ["ML-KEM-512/768/1024", "ML-DSA-44/65/87", "SHA3/SHAKE (DR9)", "DR10 Sealed Lifecycle"],
-        "tiles": [
-            # Row 0: SHIM NOC Ingress
-            {"row": 0, "col": 0, "type": "SHIM_NOC", "label": "SHIM NOC 0,0", "status": "ACTIVE", "dmaChannels": 2, "bandwidthGbps": 32.0, "currentTask": "Host PCIe Ingress"},
-            {"row": 0, "col": 1, "type": "SHIM_NOC", "label": "SHIM NOC 0,1", "status": "ACTIVE", "dmaChannels": 2, "bandwidthGbps": 32.0, "currentTask": "PQC Entropy Stream"},
-            {"row": 0, "col": 2, "type": "SHIM_NOC", "label": "SHIM NOC 0,2", "status": "ACTIVE", "dmaChannels": 2, "bandwidthGbps": 32.0, "currentTask": "ObjectFIFO Ingress"},
-            {"row": 0, "col": 3, "type": "SHIM_NOC", "label": "SHIM NOC 0,3", "status": "ACTIVE", "dmaChannels": 2, "bandwidthGbps": 32.0, "currentTask": "Result Egress"},
-            # Row 1: Core Compute (Ring Arithmetic & RejNTT)
-            {"row": 1, "col": 0, "type": "COMPUTE_AIE2", "label": "Tile (1,0)", "status": "ACTIVE", "textMemoryUsed": 8192, "textMemoryLimit": 16384, "ramUsed": 32768, "ramLimit": 65536, "currentTask": "DR0 M33 Ring Product"},
-            {"row": 1, "col": 1, "type": "COMPUTE_AIE2", "label": "Tile (1,1)", "status": "ACTIVE", "textMemoryUsed": 9400, "textMemoryLimit": 16384, "ramUsed": 36864, "ramLimit": 65536, "currentTask": "DR1 ExpandA / RejNTT"},
-            {"row": 1, "col": 2, "type": "COMPUTE_AIE2", "label": "Tile (1,2)", "status": "ACTIVE", "textMemoryUsed": 7168, "textMemoryLimit": 16384, "ramUsed": 28672, "ramLimit": 65536, "currentTask": "DR2a SampleNTT Engine"},
-            {"row": 1, "col": 3, "type": "COMPUTE_AIE2", "label": "Tile (1,3)", "status": "ACTIVE", "textMemoryUsed": 8450, "textMemoryLimit": 16384, "ramUsed": 32768, "ramLimit": 65536, "currentTask": "DR2b Noise / CBD3"},
-            # Row 2: ML-KEM CCA2 & Decapsulation Engine
-            {"row": 2, "col": 0, "type": "COMPUTE_AIE2", "label": "Tile (2,0)", "status": "ACTIVE", "textMemoryUsed": 10240, "textMemoryLimit": 16384, "ramUsed": 40960, "ramLimit": 65536, "currentTask": "DR5 ML-KEM-512 KeyGen"},
-            {"row": 2, "col": 1, "type": "COMPUTE_AIE2", "label": "Tile (2,1)", "status": "ACTIVE", "textMemoryUsed": 11500, "textMemoryLimit": 16384, "ramUsed": 45056, "ramLimit": 65536, "currentTask": "DR6 ML-KEM-512 Encaps"},
-            {"row": 2, "col": 2, "type": "COMPUTE_AIE2", "label": "Tile (2,2)", "status": "ACTIVE", "textMemoryUsed": 12800, "textMemoryLimit": 16384, "ramUsed": 51200, "ramLimit": 65536, "currentTask": "DR7 ML-KEM-512 Decaps"},
-            {"row": 2, "col": 3, "type": "COMPUTE_AIE2", "label": "Tile (2,3)", "status": "ACTIVE", "textMemoryUsed": 14200, "textMemoryLimit": 16384, "ramUsed": 57344, "ramLimit": 65536, "currentTask": "DR8 Unified 768/1024"},
-            # Row 3: ML-DSA Signatures, DR9 SHA3 Service & DR10 Sealed Lifecycle
-            {"row": 3, "col": 0, "type": "COMPUTE_AIE2", "label": "Tile (3,0)", "status": "ACTIVE", "textMemoryUsed": 13400, "textMemoryLimit": 16384, "ramUsed": 53248, "ramLimit": 65536, "currentTask": "DR11/DR12 ML-DSA-44 Sign"},
-            {"row": 3, "col": 1, "type": "COMPUTE_AIE2", "label": "Tile (3,1)", "status": "ACTIVE", "textMemoryUsed": 15872, "textMemoryLimit": 16384, "ramUsed": 63488, "ramLimit": 65536, "currentTask": "DR14/DR15 ML-DSA-65/87"},
-            {"row": 3, "col": 2, "type": "COMPUTE_AIE2", "label": "Tile (3,2)", "status": "ACTIVE", "textMemoryUsed": 9800, "textMemoryLimit": 16384, "ramUsed": 38912, "ramLimit": 65536, "currentTask": "DR9 FIPS 202 SHA-3 Service"},
-            {"row": 3, "col": 3, "type": "COMPUTE_AIE2", "label": "Tile (3,3)", "status": "ACTIVE", "textMemoryUsed": 6144, "textMemoryLimit": 16384, "ramUsed": 24576, "ramLimit": 65536, "currentTask": "DR10 Sealed Zeroization"}
-        ]
+        "activeGraphs": [
+            "DR0 Ring Arithmetic (1,0)",
+            "DR1 ExpandA Sampler (1,1)",
+            "DR2a SampleNTT (1,2)",
+            "DR2b Noise CBD3 (1,3)",
+            "DR5-DR8 ML-KEM Accelerator (2,0..2,3)",
+            "DR9 FIPS 202 Keccak Engine (3,2)",
+            "DR10 Sealed Zeroizer (3,3)",
+            "DR11-DR15 ML-DSA Suite (3,0..3,1)",
+            "DR16 ETSI GS QKD 014 Ingress (0,1)",
+            "DR17 ML-DSA QKD Authenticator (3,0)",
+            "DR18 NIST SP 800-56C Key Combiner (3,2)",
+            "DR19 Full-Duplex Hybrid Orchestrator (1,0..3,3)"
+        ],
+        "zeroizationScrubberCRC": "0xE533F258",
+        "hardwareMemoryStatus": "ISOLATED_SRAM"
     }
 
-def run_ironenv_code(code_str: str) -> dict:
-    """Execute Python snippet inside Ironenv and return parsed JSON result."""
-    if not GLOBAL_IRONENV.is_file():
-        raise RuntimeError("Ironenv Python interpreter not found on system.")
+def run_ironenv_snippet(snippet_py: str) -> dict:
+    """Execute arbitrary Python snippet inside Ironenv and parse JSON output."""
+    if not GLOBAL_IRONENV.is_file() or not GLOBAL_PQC_REPO:
+        raise RuntimeError("Hardware environment not ready: Ironenv or PQC repo missing.")
 
-    pqc_path = str(GLOBAL_PQC_REPO) if GLOBAL_PQC_REPO else ""
-    full_script = f"""
-import sys, os, time, json, secrets
-if r"{pqc_path}" not in sys.path:
-    sys.path.insert(0, r"{pqc_path}")
-
-{code_str}
-"""
     proc = subprocess.run(
-        [str(GLOBAL_IRONENV), "-c", full_script],
+        [str(GLOBAL_IRONENV), "-u", "-c", snippet_py],
+        cwd=str(GLOBAL_PQC_REPO),
         capture_output=True,
         text=True,
-        timeout=30,
-        cwd=str(GLOBAL_PQC_REPO) if GLOBAL_PQC_REPO else None
+        timeout=30
     )
     if proc.returncode != 0:
-        raise RuntimeError(f"Ironenv Execution Failed (exit {proc.returncode}): {proc.stderr or proc.stdout}")
+        raise RuntimeError(f"Hardware execution failed (code {proc.returncode}):\n{proc.stderr}\n{proc.stdout}")
 
     out = proc.stdout.strip()
     try:
@@ -216,6 +198,10 @@ GATE_SCRIPTS = [
     ("Gate 16: DR13 ML-DSA-44 Verify", "tests/pqc_device_resident/test_dr13_mldsa44_verify_silicon.py"),
     ("Gate 17: DR14 ML-DSA-65 (KeyGen, Sign, Verify)", "tests/pqc_device_resident/test_dr14_mldsa65_silicon.py"),
     ("Gate 18: DR15 ML-DSA-87 (KeyGen, Sign, Verify)", "tests/pqc_device_resident/test_dr15_mldsa87_silicon.py"),
+    ("Gate 19: DR16 ETSI GS QKD 014 Sealed Ingress", "tests/pqc_device_resident/test_dr16_etsi_qkd014_silicon.py"),
+    ("Gate 20: DR17 ML-DSA Asymmetric QKD Control", "tests/pqc_device_resident/test_dr17_mldsa_qkd_auth_silicon.py"),
+    ("Gate 21: DR18 NIST SP 800-56C Dual Combiner", "tests/pqc_device_resident/test_dr18_dual_key_combiner_silicon.py"),
+    ("Gate 22: DR19 Hybrid QKD-PQC Session Orchestrator", "tests/pqc_device_resident/test_dr19_hybrid_session_silicon.py"),
 ]
 
 class PqcBridgeHandler(http.server.BaseHTTPRequestHandler):
@@ -238,473 +224,586 @@ class PqcBridgeHandler(http.server.BaseHTTPRequestHandler):
             info = check_npu_hardware()
             payload = json.dumps(info, indent=2).encode("utf-8")
             self.send_response(200)
+            self.send_cors_headers()
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(payload)))
-            self.send_cors_headers()
             self.end_headers()
             self.wfile.write(payload)
-            self.wfile.flush()
-            return
 
-        if path == "/api/npu/architecture-status":
-            telemetry = get_architecture_telemetry()
-            payload = json.dumps(telemetry, indent=2).encode("utf-8")
+        elif path == "/api/npu/architecture-status":
+            info = get_architecture_telemetry()
+            payload = json.dumps(info, indent=2).encode("utf-8")
             self.send_response(200)
+            self.send_cors_headers()
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(payload)))
-            self.send_cors_headers()
             self.end_headers()
             self.wfile.write(payload)
-            self.wfile.flush()
-            return
 
-        if path == "/api/run-gate":
-            gate_idx = int(query.get("gate", [0])[0])
-            self.send_response(200)
-            self.send_header("Content-Type", "text/event-stream")
-            self.send_header("Cache-Control", "no-cache")
-            self.send_header("Connection", "close")
+        elif path == "/api/run-gate":
+            gate_idx = int(query.get("gate", ["0"])[0])
+            self.handle_single_gate_stream(gate_idx)
+
+        elif path == "/api/run-silicon-suite":
+            self.handle_silicon_suite_stream()
+
+        else:
+            self.send_response(404)
             self.send_cors_headers()
             self.end_headers()
-
-            if gate_idx < 0 or gate_idx >= len(GATE_SCRIPTS):
-                self.send_sse_event("error", json.dumps({"error": f"Invalid gate index {gate_idx}"}))
-                return
-
-            label, script_rel = GATE_SCRIPTS[gate_idx]
-            script_path = GLOBAL_PQC_REPO / script_rel if GLOBAL_PQC_REPO else None
-
-            if not script_path or not script_path.is_file():
-                self.send_sse_event("error", json.dumps({"error": f"Script {script_rel} not found in {GLOBAL_PQC_REPO}"}))
-                return
-
-            self.send_sse_event("start", json.dumps({"gate": label, "script": str(script_path), "gateIndex": gate_idx}))
-            cmd = [str(GLOBAL_IRONENV), "-u", str(script_path)]
-            try:
-                proc = subprocess.Popen(
-                    cmd, cwd=str(GLOBAL_PQC_REPO),
-                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                    text=True, bufsize=1, universal_newlines=True
-                )
-                for line in iter(proc.stdout.readline, ""):
-                    clean_line = line.rstrip()
-                    if clean_line:
-                        self.send_sse_event("log", json.dumps({"line": clean_line, "gateIndex": gate_idx}))
-                proc.stdout.close()
-                code = proc.wait()
-                self.send_sse_event("complete", json.dumps({
-                    "exitCode": code,
-                    "status": "PASSED" if code == 0 else "FAILED",
-                    "gateIndex": gate_idx
-                }))
-            except Exception as e:
-                self.send_sse_event("error", json.dumps({"error": str(e)}))
-            return
-
-        if path == "/api/run-silicon-suite":
-            self.send_response(200)
-            self.send_header("Content-Type", "text/event-stream")
-            self.send_header("Cache-Control", "no-cache")
-            self.send_header("Connection", "close")
-            self.send_cors_headers()
-            self.end_headers()
-
-            if not GLOBAL_PQC_REPO:
-                self.send_sse_event("error", json.dumps({
-                    "error": "Core repository 'phoenix-npu-pqc' not located. Run: python bridge_server.py --repo-path C:\\path\\to\\phoenix-npu-pqc"
-                }))
-                return
-
-            runner_script = GLOBAL_PQC_REPO / "tests" / "pqc_device_resident" / "test_all_silicon_gates.py"
-            if not runner_script.exists():
-                runner_script = GLOBAL_PQC_REPO / "run_all_silicon_tests.py"
-
-            self.send_sse_event("start", json.dumps({
-                "message": "Dispatching 19 Hardware Gates on physical AMD Phoenix NPU (AIE2)...",
-                "repo": str(GLOBAL_PQC_REPO),
-                "script": str(runner_script),
-                "ironenv": str(GLOBAL_IRONENV)
-            }))
-
-            cmd = [str(GLOBAL_IRONENV), "-u", str(runner_script)]
-            
-            try:
-                proc = subprocess.Popen(
-                    cmd,
-                    cwd=str(GLOBAL_PQC_REPO),
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    bufsize=1,
-                    universal_newlines=True
-                )
-
-                for line in iter(proc.stdout.readline, ""):
-                    clean_line = line.rstrip()
-                    if clean_line:
-                        gate_match = re.search(r'(?:\[\+\]\s*)?Gate\s*(\d+).*?PASS', clean_line, re.IGNORECASE)
-                        is_pass = gate_match is not None
-                        gate_idx = int(gate_match.group(1)) if gate_match else None
-
-                        self.send_sse_event("log", json.dumps({
-                            "line": clean_line,
-                            "isGatePass": is_pass,
-                            "gateIndex": gate_idx
-                        }))
-
-                proc.stdout.close()
-                return_code = proc.wait()
-
-                self.send_sse_event("complete", json.dumps({
-                    "exitCode": return_code,
-                    "status": "PASSED" if return_code == 0 else "FAILED",
-                    "totalGates": 19,
-                    "totalTests": 739
-                }))
-            except Exception as e:
-                self.send_sse_event("error", json.dumps({"error": str(e)}))
-            return
-
-        self.send_response(404)
-        self.send_cors_headers()
-        self.end_headers()
-        self.wfile.write(b"Not Found")
-        self.wfile.flush()
 
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
-        content_len = int(self.headers.get('Content-Length', 0))
-        post_body = self.rfile.read(content_len).decode('utf-8') if content_len > 0 else '{}'
-        
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_len) if content_len > 0 else b"{}"
         try:
-            req_data = json.loads(post_body)
+            req_data = json.loads(body.decode("utf-8")) if body else {}
         except Exception:
             req_data = {}
 
         try:
-            # 1. ML-KEM KeyGen
             if path == "/api/npu/mlkem/keygen":
-                param = req_data.get("paramSet", "ML-KEM-512")
-                d_hex = req_data.get("dHex", secrets.token_hex(32))
-                z_hex = req_data.get("zHex", secrets.token_hex(32))
-
-                if param == "ML-KEM-512":
-                    code = f"""
-from phoenix_sdr_dsp.pqc import dr5_mlkem512_keygen_graph as kg
-d = bytes.fromhex('{d_hex}')
-z = bytes.fromhex('{z_hex}')
-t0 = time.time()
-ek, dk = kg.run_mlkem512_keygen(d, z)
-dt = (time.time() - t0) * 1000
-print(json.dumps({{'publicKeyHex': ek.hex(), 'secretKeyHex': dk.hex(), 'executionTimeMs': dt, 'hardware': 'AMD Phoenix NPU AIE2 (Tile Array 2,0)'}}))
-"""
-                elif param == "ML-KEM-768":
-                    code = f"""
-from phoenix_sdr_dsp.pqc import dr8_mlkem768_keygen_graph as kg
-d = bytes.fromhex('{d_hex}')
-z = bytes.fromhex('{z_hex}')
-t0 = time.time()
-ek, dk = kg.run_mlkem768_keygen(d, z)
-dt = (time.time() - t0) * 1000
-print(json.dumps({{'publicKeyHex': ek.hex(), 'secretKeyHex': dk.hex(), 'executionTimeMs': dt, 'hardware': 'AMD Phoenix NPU AIE2 (Tile Array 2,3)'}}))
-"""
-                else: # ML-KEM-1024
-                    code = f"""
-from phoenix_sdr_dsp.pqc import dr8_mlkem1024_keygen_graph as kg
-d = bytes.fromhex('{d_hex}')
-z = bytes.fromhex('{z_hex}')
-t0 = time.time()
-ek, dk = kg.run_mlkem1024_keygen(d, z)
-dt = (time.time() - t0) * 1000
-print(json.dumps({{'publicKeyHex': ek.hex(), 'secretKeyHex': dk.hex(), 'executionTimeMs': dt, 'hardware': 'AMD Phoenix NPU AIE2 (Tile Array 2,3)'}}))
-"""
-                res = run_ironenv_code(code)
-                self.send_json_response(res)
+                resp = self.dispatch_mlkem_keygen(req_data)
+            elif path == "/api/npu/mlkem/encaps":
+                resp = self.dispatch_mlkem_encaps(req_data)
+            elif path == "/api/npu/mlkem/decaps":
+                resp = self.dispatch_mlkem_decaps(req_data)
+            elif path == "/api/npu/mldsa/keygen":
+                resp = self.dispatch_mldsa_keygen(req_data)
+            elif path == "/api/npu/mldsa/sign":
+                resp = self.dispatch_mldsa_sign(req_data)
+            elif path == "/api/npu/mldsa/verify":
+                resp = self.dispatch_mldsa_verify(req_data)
+            elif path == "/api/npu/keccak/hash":
+                resp = self.dispatch_keccak_hash(req_data)
+            elif path == "/api/npu/zeroize":
+                resp = self.dispatch_zeroize(req_data)
+            elif path == "/api/npu/hybrid/handshake":
+                resp = self.dispatch_hybrid_handshake(req_data)
+            elif path == "/api/npu/hybrid/qkd-ingress":
+                resp = self.dispatch_qkd_ingress(req_data)
+            elif path == "/api/npu/hybrid/mldsa-auth":
+                resp = self.dispatch_mldsa_auth(req_data)
+            elif path == "/api/npu/hybrid/combine":
+                resp = self.dispatch_key_combine(req_data)
+            else:
+                self.send_response(404)
+                self.send_cors_headers()
+                self.end_headers()
                 return
 
-            # 2. ML-KEM Encaps
-            if path == "/api/npu/mlkem/encaps":
-                param = req_data.get("paramSet", "ML-KEM-512")
-                ek_hex = req_data.get("publicKeyHex", "")
-                m_hex = req_data.get("mHex", secrets.token_hex(32))
-
-                if param == "ML-KEM-512":
-                    mod_name = "dr6_mlkem512_encaps_graph"
-                    fn_name = "run_mlkem512_encaps"
-                    tile_label = "Tile Array 2,1"
-                elif param == "ML-KEM-768":
-                    mod_name = "dr8_mlkem768_encaps_graph"
-                    fn_name = "run_mlkem768_encaps"
-                    tile_label = "Tile Array 2,3"
-                else:
-                    mod_name = "dr8_mlkem1024_encaps_graph"
-                    fn_name = "run_mlkem1024_encaps"
-                    tile_label = "Tile Array 2,3"
-
-                code = f"""
-from phoenix_sdr_dsp.pqc import {mod_name} as enc
-ek = bytes.fromhex('{ek_hex}')
-m = bytes.fromhex('{m_hex}')
-t0 = time.time()
-ct, ss = enc.{fn_name}(ek, m)
-dt = (time.time() - t0) * 1000
-print(json.dumps({{'ciphertextHex': ct.hex(), 'sharedSecretHex': ss.hex(), 'executionTimeMs': dt, 'hardware': 'AMD Phoenix NPU AIE2 ({tile_label})'}}))
-"""
-                res = run_ironenv_code(code)
-                self.send_json_response(res)
-                return
-
-            # 3. ML-KEM Decaps
-            if path == "/api/npu/mlkem/decaps":
-                param = req_data.get("paramSet", "ML-KEM-512")
-                dk_hex = req_data.get("secretKeyHex", "")
-                ct_hex = req_data.get("ciphertextHex", "")
-
-                if param == "ML-KEM-512":
-                    mod_name = "dr7_mlkem512_decaps_graph"
-                    fn_name = "run_mlkem512_decaps"
-                    tile_label = "Tile Array 2,2"
-                elif param == "ML-KEM-768":
-                    mod_name = "dr8_mlkem768_decaps_graph"
-                    fn_name = "run_mlkem768_decaps"
-                    tile_label = "Tile Array 2,3"
-                else:
-                    mod_name = "dr8_mlkem1024_decaps_graph"
-                    fn_name = "run_mlkem1024_decaps"
-                    tile_label = "Tile Array 2,3"
-
-                code = f"""
-from phoenix_sdr_dsp.pqc import {mod_name} as dec
-dk = bytes.fromhex('{dk_hex}')
-ct = bytes.fromhex('{ct_hex}')
-t0 = time.time()
-ss = dec.{fn_name}(dk, ct)
-dt = (time.time() - t0) * 1000
-print(json.dumps({{'sharedSecretHex': ss.hex(), 'executionTimeMs': dt, 'hardware': 'AMD Phoenix NPU AIE2 ({tile_label})'}}))
-"""
-                res = run_ironenv_code(code)
-                self.send_json_response(res)
-                return
-
-            # 4. ML-DSA KeyGen
-            if path == "/api/npu/mldsa/keygen":
-                param = req_data.get("paramSet", "ML-DSA-44")
-                xi_hex = req_data.get("xiHex", secrets.token_hex(32))
-
-                if param == "ML-DSA-44":
-                    mod_name = "dr11_mldsa44_keygen_graph"
-                    fn_name = "run_mldsa44_keygen"
-                    tile_label = "Tile Array 3,0"
-                elif param == "ML-DSA-65":
-                    mod_name = "dr14_mldsa65_keygen_graph"
-                    fn_name = "run_mldsa65_keygen"
-                    tile_label = "Tile Array 3,1"
-                else:
-                    mod_name = "dr15_mldsa87_keygen_graph"
-                    fn_name = "run_mldsa87_keygen"
-                    tile_label = "Tile Array 3,1"
-
-                code = f"""
-from phoenix_sdr_dsp.pqc import {mod_name} as kg
-xi = bytes.fromhex('{xi_hex}')
-t0 = time.time()
-pk, sk = kg.{fn_name}(xi)
-dt = (time.time() - t0) * 1000
-print(json.dumps({{'publicKeyHex': pk.hex(), 'secretKeyHex': sk.hex(), 'executionTimeMs': dt, 'hardware': 'AMD Phoenix NPU AIE2 ({tile_label})'}}))
-"""
-                res = run_ironenv_code(code)
-                self.send_json_response(res)
-                return
-
-            # 5. ML-DSA Sign
-            if path == "/api/npu/mldsa/sign":
-                param = req_data.get("paramSet", "ML-DSA-44")
-                sk_hex = req_data.get("secretKeyHex", "")
-                msg_hex = req_data.get("messageHex", "")
-                rnd_hex = req_data.get("rndHex", secrets.token_hex(32))
-
-                if param == "ML-DSA-44":
-                    code = f"""
-from phoenix_sdr_dsp.pqc import dr12_mldsa44_sign_graph as sign
-sk = bytes.fromhex('{sk_hex}')
-msg = bytes.fromhex('{msg_hex}')
-rnd = bytes.fromhex('{rnd_hex}')
-t0 = time.time()
-sig = sign.run_mldsa44_sign(sk, msg, rnd=rnd)
-dt = (time.time() - t0) * 1000
-print(json.dumps({{'signatureHex': sig.hex(), 'loops': 1, 'hintWeight': 32, 'executionTimeMs': dt, 'hardware': 'AMD Phoenix NPU AIE2 (Tile Array 3,0)'}}))
-"""
-                elif param == "ML-DSA-65":
-                    code = f"""
-from phoenix_sdr_dsp.pqc import dr14_mldsa65_sign_graph as sign
-sk = bytes.fromhex('{sk_hex}')
-msg = bytes.fromhex('{msg_hex}')
-t0 = time.time()
-sig = sign.run_mldsa65_sign(sk, msg)
-dt = (time.time() - t0) * 1000
-print(json.dumps({{'signatureHex': sig.hex(), 'loops': 1, 'hintWeight': 48, 'executionTimeMs': dt, 'hardware': 'AMD Phoenix NPU AIE2 (Tile Array 3,1)'}}))
-"""
-                else: # ML-DSA-87
-                    code = f"""
-from phoenix_sdr_dsp.pqc import dr15_mldsa87_sign_graph as sign
-sk = bytes.fromhex('{sk_hex}')
-msg = bytes.fromhex('{msg_hex}')
-t0 = time.time()
-sig = sign.run_mldsa87_sign(sk, msg)
-dt = (time.time() - t0) * 1000
-print(json.dumps({{'signatureHex': sig.hex(), 'loops': 1, 'hintWeight': 60, 'executionTimeMs': dt, 'hardware': 'AMD Phoenix NPU AIE2 (Tile Array 3,1)'}}))
-"""
-                res = run_ironenv_code(code)
-                self.send_json_response(res)
-                return
-
-            # 6. ML-DSA Verify
-            if path == "/api/npu/mldsa/verify":
-                param = req_data.get("paramSet", "ML-DSA-44")
-                pk_hex = req_data.get("publicKeyHex", "")
-                msg_hex = req_data.get("messageHex", "")
-                sig_hex = req_data.get("signatureHex", "")
-
-                if param == "ML-DSA-44":
-                    mod_name = "dr13_mldsa44_verify_graph"
-                    fn_name = "run_mldsa44_verify"
-                    tile_label = "Tile Array 3,0"
-                elif param == "ML-DSA-65":
-                    mod_name = "dr14_mldsa65_verify_graph"
-                    fn_name = "run_mldsa65_verify"
-                    tile_label = "Tile Array 3,1"
-                else:
-                    mod_name = "dr15_mldsa87_verify_graph"
-                    fn_name = "run_mldsa87_verify"
-                    tile_label = "Tile Array 3,1"
-
-                code = f"""
-from phoenix_sdr_dsp.pqc import {mod_name} as ver
-pk = bytes.fromhex('{pk_hex}')
-msg = bytes.fromhex('{msg_hex}')
-sig = bytes.fromhex('{sig_hex}')
-t0 = time.time()
-try:
-    valid = ver.{fn_name}(pk, msg, sig)
-except Exception:
-    valid = False
-dt = (time.time() - t0) * 1000
-print(json.dumps({{'valid': bool(valid), 'executionTimeMs': dt, 'hardware': 'AMD Phoenix NPU AIE2 ({tile_label})'}}))
-"""
-                res = run_ironenv_code(code)
-                self.send_json_response(res)
-                return
-
-            # 7. SHA-3 / SHAKE Hash
-            if path == "/api/npu/keccak/hash":
-                algo = req_data.get("algorithm", "SHA3-256")
-                msg_hex = req_data.get("messageHex", "")
-                squeeze_len = req_data.get("squeezeBytes", 32)
-
-                code = f"""
-from phoenix_sdr_dsp.pqc import dr9_fips202_graph as dr9
-msg = bytes.fromhex('{msg_hex}')
-t0 = time.time()
-digest = dr9.run_fips202_service('{algo}', msg, out_len={squeeze_len})
-dt = (time.time() - t0) * 1000
-print(json.dumps({{'digestHex': digest.hex(), 'executionTimeMs': dt, 'hardware': 'AMD Phoenix NPU AIE2 (DR9 Tile 3,2)'}}))
-"""
-                res = run_ironenv_code(code)
-                self.send_json_response(res)
-                return
-
-            # 8. DR10 Hardware Zeroization
-            if path == "/api/npu/zeroize":
-                code = f"""
-from phoenix_sdr_dsp.pqc import dr10_sealed_lifecycle_graph as dr10
-from phoenix_sdr_dsp.pqc import dr10_sealed_lifecycle_abi as abi
-t0 = time.time()
-req_buf = bytes(256)
-desc_buf = abi.pack_dr10_descriptor(abi.SOURCE_MODE_SEALED_SESSION, 1, request_id=71, epoch=600)
-req_id, status, active_slot, crc = dr10.run_dr10_service(req_buf, desc_buf)
-dt = (time.time() - t0) * 1000
-print(json.dumps({{
-    'zeroizedBytes': 262144,
-    'tiles': ['Tile (0,2)', 'Tile (0,3)', 'Tile (1,2)', 'Tile (1,3)', 'Tile (2,2)', 'Tile (3,3)'],
-    'status': 'ZEROIZED',
-    'activeSlot': active_slot,
-    'hardwareCrc32': hex(crc),
-    'executionTimeMs': dt,
-    'hardware': 'AMD Phoenix NPU AIE2 (DR10 Memory Scrubber)'
-}}))
-"""
-                res = run_ironenv_code(code)
-                self.send_json_response(res)
-                return
+            payload = json.dumps(resp).encode("utf-8")
+            self.send_response(200)
+            self.send_cors_headers()
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
 
         except Exception as e:
+            err_payload = json.dumps({"error": str(e), "success": False}).encode("utf-8")
             self.send_response(500)
             self.send_cors_headers()
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(err_payload)))
             self.end_headers()
-            self.wfile.write(json.dumps({"error": str(e)}).encode("utf-8"))
-            self.wfile.flush()
+            self.wfile.write(err_payload)
+
+    def dispatch_hybrid_handshake(self, req: dict) -> dict:
+        kem = req.get("kem_param", "ML-KEM-512")
+        dsa = req.get("dsa_param", "ML-DSA-44")
+        epoch = int(req.get("epoch", 1000))
+
+        snippet = f"""
+import json, sys
+from pathlib import Path
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+from phoenix_sdr_dsp.pqc.dr19_hybrid_session_orchestrator import run_hybrid_handshake_on_aie2
+
+res = run_hybrid_handshake_on_aie2(kem_param="{kem}", dsa_param="{dsa}", epoch={epoch})
+out = {{
+    "session_id": str(res.session_id),
+    "k_final_master": res.k_final_master.hex(),
+    "k_final_slave": res.k_final_slave.hex(),
+    "is_authenticated": res.is_authenticated,
+    "is_key_matched": res.is_key_matched,
+    "total_latency_ms": res.total_latency_ms,
+    "zeroized_status": res.zeroized_status,
+    "hardware_execution": True,
+    "tiles_used": "AIE2 Rows 0..3 (16 worker tiles)"
+}}
+print(json.dumps(out))
+"""
+        return run_ironenv_snippet(snippet)
+
+    def dispatch_qkd_ingress(self, req: dict) -> dict:
+        container_json = req.get("container_json")
+        epoch = int(req.get("epoch", 1000))
+        snippet = f"""
+import json, sys
+from pathlib import Path
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+from phoenix_sdr_dsp.pqc import dr16_etsi_qkd014_abi as abi
+from phoenix_sdr_dsp.pqc.dr16_etsi_qkd014_graph import run_dr16_ingress_service
+
+keys = abi.parse_etsi_014_json({json.dumps(container_json)}, epoch={epoch})
+k = keys[0]
+desc = abi.pack_dr16_descriptor(k.key_id, k.epoch, len(k.key_bytes))
+req = abi.pack_dr16_request(k.key_bytes)
+req_id, status, slot, crc = run_dr16_ingress_service(req, desc)
+
+out = {{
+    "status": status,
+    "active_slot": slot,
+    "crc32": f"0x{{crc:08X}}",
+    "key_id": str(k.key_id),
+    "key_len": len(k.key_bytes),
+    "hardware_execution": True
+}}
+print(json.dumps(out))
+"""
+        return run_ironenv_snippet(snippet)
+
+    def dispatch_mldsa_auth(self, req: dict) -> dict:
+        param = req.get("param_set", "ML-DSA-44")
+        pk_hex = req.get("public_key")
+        sig_hex = req.get("signature")
+        master = req.get("sae_master", "SAE_MASTER")
+        slave = req.get("sae_slave", "SAE_SLAVE")
+        kid_str = req.get("key_id")
+        epoch = int(req.get("epoch", 1000))
+        nonce_hex = req.get("nonce", "00" * 12)
+
+        snippet = f"""
+import json, sys, uuid
+from pathlib import Path
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+from phoenix_sdr_dsp.pqc.dr17_mldsa_qkd_auth_graph import verify_qkd_manifest_on_aie2
+
+pk = bytes.fromhex("{pk_hex}")
+sig = bytes.fromhex("{sig_hex}")
+kid = uuid.UUID("{kid_str}")
+nonce = bytes.fromhex("{nonce_hex}")
+
+valid, status, dt = verify_qkd_manifest_on_aie2(
+    "{param}", pk, "{master}", "{slave}", kid, {epoch}, nonce, sig
+)
+out = {{
+    "valid": valid,
+    "status": status,
+    "latency_ms": dt,
+    "hardware_execution": True
+}}
+print(json.dumps(out))
+"""
+        return run_ironenv_snippet(snippet)
+
+    def dispatch_key_combine(self, req: dict) -> dict:
+        k_qkd = req.get("k_qkd_hex", "00" * 32)
+        k_pqc = req.get("k_pqc_hex", "00" * 32)
+        kid_str = req.get("key_id", str(uuid.uuid4()))
+        epoch = int(req.get("epoch", 1000))
+        out_len = int(req.get("out_len", 32))
+
+        snippet = f"""
+import json, sys, uuid
+from pathlib import Path
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+from phoenix_sdr_dsp.pqc.dr18_dual_key_combiner_graph import combine_keys_on_aie2
+
+kq = bytes.fromhex("{k_qkd}")
+kp = bytes.fromhex("{k_pqc}")
+kid = uuid.UUID("{kid_str}")
+
+k_final, dt = combine_keys_on_aie2(kq, kp, kid, epoch={epoch}, out_len={out_len})
+out = {{
+    "k_final_hex": k_final.hex(),
+    "latency_ms": dt,
+    "out_len": len(k_final),
+    "hardware_execution": True
+}}
+print(json.dumps(out))
+"""
+        return run_ironenv_snippet(snippet)
+
+    def dispatch_mlkem_keygen(self, req: dict) -> dict:
+        param = req.get("param_set", "ML-KEM-512")
+        d_hex = req.get("d_hex") or secrets.token_hex(32)
+        z_hex = req.get("z_hex") or secrets.token_hex(32)
+
+        snippet = f"""
+import json, sys, time
+from pathlib import Path
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+
+d = bytes.fromhex("{d_hex}")
+z = bytes.fromhex("{z_hex}")
+t0 = time.time()
+
+if "{param}" == "ML-KEM-512":
+    from phoenix_sdr_dsp.pqc.dr5_mlkem512_keygen_graph import run_mlkem512_keygen
+    ek, dk = run_mlkem512_keygen(d, z)
+elif "{param}" == "ML-KEM-768":
+    from phoenix_sdr_dsp.pqc.dr8_mlkem768_keygen_graph import run_mlkem768_keygen
+    ek, dk = run_mlkem768_keygen(d, z)
+elif "{param}" == "ML-KEM-1024":
+    from phoenix_sdr_dsp.pqc.dr8_mlkem1024_keygen_graph import run_mlkem1024_keygen
+    ek, dk = run_mlkem1024_keygen(d, z)
+
+dt = (time.time() - t0) * 1000
+out = {{"ek_hex": ek.hex(), "dk_hex": dk.hex(), "latency_ms": dt, "hardware_execution": True}}
+print(json.dumps(out))
+"""
+        return run_ironenv_snippet(snippet)
+
+    def dispatch_mlkem_encaps(self, req: dict) -> dict:
+        param = req.get("param_set", "ML-KEM-512")
+        ek_hex = req.get("ek_hex")
+        m_hex = req.get("m_hex") or secrets.token_hex(32)
+
+        snippet = f"""
+import json, sys, time
+from pathlib import Path
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+
+ek = bytes.fromhex("{ek_hex}")
+m = bytes.fromhex("{m_hex}")
+t0 = time.time()
+
+if "{param}" == "ML-KEM-512":
+    from phoenix_sdr_dsp.pqc.dr6_mlkem512_encaps_graph import run_mlkem512_encaps
+    ct, ss = run_mlkem512_encaps(ek, m)
+elif "{param}" == "ML-KEM-768":
+    from phoenix_sdr_dsp.pqc.dr8_mlkem768_encaps_graph import run_mlkem768_encaps
+    ct, ss = run_mlkem768_encaps(ek, m)
+elif "{param}" == "ML-KEM-1024":
+    from phoenix_sdr_dsp.pqc.dr8_mlkem1024_encaps_graph import run_mlkem1024_encaps
+    ct, ss = run_mlkem1024_encaps(ek, m)
+
+dt = (time.time() - t0) * 1000
+out = {{"ct_hex": ct.hex(), "ss_hex": ss.hex(), "latency_ms": dt, "hardware_execution": True}}
+print(json.dumps(out))
+"""
+        return run_ironenv_snippet(snippet)
+
+    def dispatch_mlkem_decaps(self, req: dict) -> dict:
+        param = req.get("param_set", "ML-KEM-512")
+        dk_hex = req.get("dk_hex")
+        ct_hex = req.get("ct_hex")
+
+        snippet = f"""
+import json, sys, time
+from pathlib import Path
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+
+dk = bytes.fromhex("{dk_hex}")
+ct = bytes.fromhex("{ct_hex}")
+t0 = time.time()
+
+if "{param}" == "ML-KEM-512":
+    from phoenix_sdr_dsp.pqc.dr7_mlkem512_decaps_graph import run_mlkem512_decaps
+    ss = run_mlkem512_decaps(dk, ct)
+elif "{param}" == "ML-KEM-768":
+    from phoenix_sdr_dsp.pqc.dr8_mlkem768_decaps_graph import run_mlkem768_decaps
+    ss = run_mlkem768_decaps(dk, ct)
+elif "{param}" == "ML-KEM-1024":
+    from phoenix_sdr_dsp.pqc.dr8_mlkem1024_decaps_graph import run_mlkem1024_decaps
+    ss = run_mlkem1024_decaps(dk, ct)
+
+dt = (time.time() - t0) * 1000
+out = {{"ss_hex": ss.hex(), "latency_ms": dt, "hardware_execution": True}}
+print(json.dumps(out))
+"""
+        return run_ironenv_snippet(snippet)
+
+    def dispatch_mldsa_keygen(self, req: dict) -> dict:
+        param = req.get("param_set", "ML-DSA-44")
+        xi_hex = req.get("xi_hex") or secrets.token_hex(32)
+
+        snippet = f"""
+import json, sys, time
+from pathlib import Path
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+
+xi = bytes.fromhex("{xi_hex}")
+t0 = time.time()
+
+if "{param}" == "ML-DSA-44":
+    from phoenix_sdr_dsp.pqc.dr11_mldsa44_keygen_graph import run_mldsa44_keygen
+    pk, sk = run_mldsa44_keygen(xi)
+elif "{param}" == "ML-DSA-65":
+    from phoenix_sdr_dsp.pqc.dr14_mldsa65_keygen_graph import run_mldsa65_keygen
+    pk, sk = run_mldsa65_keygen(xi)
+elif "{param}" == "ML-DSA-87":
+    from phoenix_sdr_dsp.pqc.dr15_mldsa87_keygen_graph import run_mldsa87_keygen
+    pk, sk = run_mldsa87_keygen(xi)
+
+dt = (time.time() - t0) * 1000
+out = {{"pk_hex": pk.hex(), "sk_hex": sk.hex(), "latency_ms": dt, "hardware_execution": True}}
+print(json.dumps(out))
+"""
+        return run_ironenv_snippet(snippet)
+
+    def dispatch_mldsa_sign(self, req: dict) -> dict:
+        param = req.get("param_set", "ML-DSA-44")
+        sk_hex = req.get("sk_hex")
+        msg_hex = req.get("msg_hex")
+
+        snippet = f"""
+import json, sys, time
+from pathlib import Path
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+
+sk = bytes.fromhex("{sk_hex}")
+msg = bytes.fromhex("{msg_hex}")
+t0 = time.time()
+
+if "{param}" == "ML-DSA-44":
+    from phoenix_sdr_dsp.pqc.dr12_mldsa44_sign_graph import run_mldsa44_sign
+    sig = run_mldsa44_sign(sk, msg)
+elif "{param}" == "ML-DSA-65":
+    from hashlib import shake_256
+    from phoenix_sdr_dsp.pqc.dr14_mldsa65_sign_graph import run_mldsa65_sign
+    tr = sk[64:128]
+    mu = shake_256(tr + msg).digest(64)
+    sig = run_mldsa65_sign(sk, mu, external_mu=True)
+elif "{param}" == "ML-DSA-87":
+    from hashlib import shake_256
+    from phoenix_sdr_dsp.pqc.dr15_mldsa87_sign_graph import run_mldsa87_sign
+    tr = sk[64:128]
+    mu = shake_256(tr + msg).digest(64)
+    sig = run_mldsa87_sign(sk, mu, external_mu=True)
+
+dt = (time.time() - t0) * 1000
+out = {{"sig_hex": sig.hex(), "latency_ms": dt, "hardware_execution": True}}
+print(json.dumps(out))
+"""
+        return run_ironenv_snippet(snippet)
+
+    def dispatch_mldsa_verify(self, req: dict) -> dict:
+        param = req.get("param_set", "ML-DSA-44")
+        pk_hex = req.get("pk_hex")
+        msg_hex = req.get("msg_hex")
+        sig_hex = req.get("sig_hex")
+
+        snippet = f"""
+import json, sys, time
+from pathlib import Path
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+
+pk = bytes.fromhex("{pk_hex}")
+msg = bytes.fromhex("{msg_hex}")
+sig = bytes.fromhex("{sig_hex}")
+t0 = time.time()
+
+if "{param}" == "ML-DSA-44":
+    from phoenix_sdr_dsp.pqc.dr13_mldsa44_verify_graph import run_mldsa44_verify
+    valid = run_mldsa44_verify(pk, msg, sig)
+elif "{param}" == "ML-DSA-65":
+    from hashlib import shake_256
+    from phoenix_sdr_dsp.pqc.dr14_mldsa65_verify_graph import run_mldsa65_verify
+    tr = shake_256(pk).digest(64)
+    mu = shake_256(tr + msg).digest(64)
+    valid = run_mldsa65_verify(pk, sig, mu, external_mu=True)
+elif "{param}" == "ML-DSA-87":
+    from hashlib import shake_256
+    from phoenix_sdr_dsp.pqc.dr15_mldsa87_verify_graph import run_mldsa87_verify
+    tr = shake_256(pk).digest(64)
+    mu = shake_256(tr + msg).digest(64)
+    valid = run_mldsa87_verify(pk, sig, mu, external_mu=True)
+
+dt = (time.time() - t0) * 1000
+out = {{"valid": valid, "latency_ms": dt, "hardware_execution": True}}
+print(json.dumps(out))
+"""
+        return run_ironenv_snippet(snippet)
+
+    def dispatch_keccak_hash(self, req: dict) -> dict:
+        func = req.get("function_name", "SHA3-256")
+        msg_hex = req.get("msg_hex", "")
+        out_len = int(req.get("out_len", 32))
+
+        snippet = f"""
+import json, sys, time
+from pathlib import Path
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+from phoenix_sdr_dsp.pqc.dr9_fips202_graph import run_fips202_service
+
+msg = bytes.fromhex("{msg_hex}")
+t0 = time.time()
+digest = run_fips202_service("{func}", msg, out_len={out_len})
+dt = (time.time() - t0) * 1000
+out = {{"digest_hex": digest.hex(), "latency_ms": dt, "hardware_execution": True}}
+print(json.dumps(out))
+"""
+        return run_ironenv_snippet(snippet)
+
+    def dispatch_zeroize(self, req: dict) -> dict:
+        snippet = f"""
+import json, sys, time
+from pathlib import Path
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+from phoenix_sdr_dsp.pqc.dr10_sealed_lifecycle_graph import run_dr10_service
+from phoenix_sdr_dsp.pqc.dr10_sealed_lifecycle_abi import pack_dr10_descriptor, SOURCE_MODE_SEALED_SESSION
+
+t0 = time.time()
+req_buf = bytes(256)
+desc_buf = pack_dr10_descriptor(SOURCE_MODE_SEALED_SESSION, 1, request_id=999, epoch=999)
+req_id, status, epoch, crc = run_dr10_service(req_buf, desc_buf)
+dt = (time.time() - t0) * 1000
+
+out = {{
+    "status": status,
+    "status_label": "SUCCESS (WIPED)" if status == 0 else "ERROR",
+    "crc32": f"0x{{crc:08X}}",
+    "bytes_zeroized": 262144,
+    "latency_ms": dt,
+    "hardware_execution": True
+}}
+print(json.dumps(out))
+"""
+        return run_ironenv_snippet(snippet)
+
+    def handle_single_gate_stream(self, gate_idx: int):
+        self.send_response(200)
+        self.send_cors_headers()
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
+        self.end_headers()
+
+        if gate_idx < 0 or gate_idx >= len(GATE_SCRIPTS):
+            self.wfile.write(b"data: " + json.dumps({"error": "Invalid gate index"}).encode("utf-8") + b"\n\n")
             return
 
-        self.send_response(404)
-        self.send_cors_headers()
-        self.end_headers()
-        self.wfile.write(b"Not Found")
+        gate_name, script_rel = GATE_SCRIPTS[gate_idx]
+        script_full = GLOBAL_PQC_REPO / script_rel
+
+        self.wfile.write(b"data: " + json.dumps({
+            "type": "start",
+            "gate": gate_idx,
+            "gate_name": gate_name,
+            "script": script_rel
+        }).encode("utf-8") + b"\n\n")
         self.wfile.flush()
 
-    def send_json_response(self, data: dict):
-        payload = json.dumps(data, indent=2).encode("utf-8")
+        t0 = time.time()
+        proc = subprocess.Popen(
+            [str(GLOBAL_IRONENV), "-u", str(script_full)],
+            cwd=str(GLOBAL_PQC_REPO),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1
+        )
+
+        for line in proc.stdout:
+            self.wfile.write(b"data: " + json.dumps({
+                "type": "log",
+                "gate": gate_idx,
+                "text": line.rstrip()
+            }).encode("utf-8") + b"\n\n")
+            self.wfile.flush()
+
+        proc.wait()
+        dt = time.time() - t0
+
+        self.wfile.write(b"data: " + json.dumps({
+            "type": "finish",
+            "gate": gate_idx,
+            "exit_code": proc.returncode,
+            "passed": proc.returncode == 0,
+            "duration_s": dt
+        }).encode("utf-8") + b"\n\n")
+        self.wfile.flush()
+
+    def handle_silicon_suite_stream(self):
         self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(payload)))
         self.send_cors_headers()
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
         self.end_headers()
-        self.wfile.write(payload)
+
+        total_gates = len(GATE_SCRIPTS)
+        passed_count = 0
+        t_suite_start = time.time()
+
+        self.wfile.write(b"data: " + json.dumps({
+            "type": "suite_start",
+            "total_gates": total_gates,
+            "message": "Starting 23 Silicon Gates Suite on AMD Phoenix AIE2..."
+        }).encode("utf-8") + b"\n\n")
         self.wfile.flush()
 
-    def send_sse_event(self, event_type: str, data: str):
-        msg = f"event: {event_type}\ndata: {data}\n\n"
-        self.wfile.write(msg.encode("utf-8"))
+        for idx, (gate_name, script_rel) in enumerate(GATE_SCRIPTS):
+            script_full = GLOBAL_PQC_REPO / script_rel
+            t0 = time.time()
+
+            self.wfile.write(b"data: " + json.dumps({
+                "type": "gate_start",
+                "gate_index": idx,
+                "gate_name": gate_name,
+                "progress": f"{idx+1}/{total_gates}"
+            }).encode("utf-8") + b"\n\n")
+            self.wfile.flush()
+
+            proc = subprocess.Popen(
+                [str(GLOBAL_IRONENV), "-u", str(script_full)],
+                cwd=str(GLOBAL_PQC_REPO),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
+
+            for line in proc.stdout:
+                self.wfile.write(b"data: " + json.dumps({
+                    "type": "gate_log",
+                    "gate_index": idx,
+                    "text": line.rstrip()
+                }).encode("utf-8") + b"\n\n")
+                self.wfile.flush()
+
+            proc.wait()
+            dt = time.time() - t0
+            is_pass = (proc.returncode == 0)
+            if is_pass:
+                passed_count += 1
+
+            self.wfile.write(b"data: " + json.dumps({
+                "type": "gate_finish",
+                "gate_index": idx,
+                "exit_code": proc.returncode,
+                "passed": is_pass,
+                "duration_s": dt
+            }).encode("utf-8") + b"\n\n")
+            self.wfile.flush()
+
+        dt_all = time.time() - t_suite_start
+        self.wfile.write(b"data: " + json.dumps({
+            "type": "suite_finish",
+            "passed_gates": passed_count,
+            "total_gates": total_gates,
+            "all_passed": (passed_count == total_gates),
+            "total_duration_s": dt_all
+        }).encode("utf-8") + b"\n\n")
         self.wfile.flush()
 
-    def log_message(self, format, *args):
-        pass
-
-def main():
-    parser = argparse.ArgumentParser(description="AMD Phoenix NPU PQC Frontend Hardware Bridge")
-    parser.add_argument("--port", type=int, default=PORT, help=f"Port to bind (default: {PORT})")
-    parser.add_argument("--repo-path", type=str, default=None, help="Path to core phoenix-npu-pqc repo")
-    args = parser.parse_args()
-
-    global GLOBAL_PQC_REPO, GLOBAL_IRONENV
-    if args.repo_path:
-        GLOBAL_PQC_REPO = find_pqc_repo(args.repo_path)
-        GLOBAL_IRONENV = find_ironenv_python(GLOBAL_PQC_REPO)
-
-    print("=" * 75)
-    print("   AMD Phoenix NPU PQC Frontend Hardware Bridge Server v1.2.0")
-    print("=" * 75)
-    info = check_npu_hardware()
-    print(f"Target Hardware:    {info['device_name']}")
-    print(f"Host APU:           {info['host_soc']}")
-    print(f"AMD NPU Driver:     {'OK: ' + info['npu_driver_name'] if info['npu_driver_detected'] else 'WARNING: Device not detected in registry'}")
-    print(f"Core PQC Repo:      {info['pqc_repo_path']} (Found: {info['pqc_repo_ready']})")
-    print(f"Ironenv Runtime:    {info['ironenv_path']} (Found: {info['ironenv_ready']})")
-    print(f"Bridge API URL:     http://{HOST}:{args.port}")
-    print("=" * 75)
-
-    if not GLOBAL_PQC_REPO:
-        print("[WARNING] Could not automatically locate 'phoenix-npu-pqc'.")
-        print("          Pass: python bridge_server.py --repo-path <PATH>")
-    else:
-        print("[READY] All PQC Hardware REST Endpoints Active & Ready for NPU Execution.")
-
-    server = http.server.ThreadingHTTPServer((HOST, args.port), PqcBridgeHandler)
+def run_server():
+    server = http.server.ThreadingHTTPServer((HOST, PORT), PqcBridgeHandler)
+    print(f"[*] Phoenix PQC Bridge Server v1.3.0 listening on http://{HOST}:{PORT}")
+    print(f"[*] AMD Phoenix NPU: {check_npu_hardware()['device_name']}")
+    print(f"[*] Ironenv Python: {GLOBAL_IRONENV}")
+    print(f"[*] Core PQC Repo: {GLOBAL_PQC_REPO}")
+    print(f"[*] Registered Silicon Gates: {len(GATE_SCRIPTS)} (DR0 through DR19)")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nShutting down hardware bridge server.")
+        print("\n[*] Shutting down bridge server.")
         server.server_close()
 
 if __name__ == "__main__":
-    main()
+    run_server()

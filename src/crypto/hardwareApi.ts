@@ -302,3 +302,78 @@ export async function npuZeroize(): Promise<{ zeroizedBytes: number; tiles: stri
     executionTimeMs: 14.2,
   };
 }
+// ---------------------------------------------------------------------------
+// HYBRID QKD + PQC (DR16–DR20)
+// ---------------------------------------------------------------------------
+
+export interface HybridHandshakeResult {
+  sessionId: string;
+  kFinalMaster: string;
+  kFinalSlave: string;
+  isAuthenticated: boolean;
+  isKeyMatched: boolean;
+  totalLatencyMs: number;
+  zeroizedStatus: number;
+  isHardware: boolean;
+  hardwareLabel?: string;
+  tilesUsed?: string;
+}
+
+export async function runHybridHandshakeOnHardware(
+  kemParam: string = 'ML-KEM-512',
+  dsaParam: string = 'ML-DSA-44',
+  epoch: number = 1000
+): Promise<HybridHandshakeResult> {
+  try {
+    const res = await fetch(`${BRIDGE_URL}/api/npu/hybrid/handshake`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kem_param: kemParam, dsa_param: dsaParam, epoch }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        sessionId: data.session_id,
+        kFinalMaster: data.k_final_master,
+        kFinalSlave: data.k_final_slave,
+        isAuthenticated: data.is_authenticated,
+        isKeyMatched: data.is_key_matched,
+        totalLatencyMs: data.total_latency_ms,
+        zeroizedStatus: data.zeroized_status,
+        isHardware: true,
+        hardwareLabel: 'AMD Phoenix NPU (AIE2 / XDNA1 Architecture)',
+        tilesUsed: data.tiles_used || '16 Compute Tiles (Rows 0..3)',
+      };
+    }
+  } catch {
+    // Fallback
+  }
+
+  // Fallback local simulation
+  return {
+    sessionId: 'c3f10118-8f83-4351-a967-932f9cb2405a',
+    kFinalMaster: '9f84b45a6c38210340d8692138bcfd2a89c791350a41680d28362b489a246811',
+    kFinalSlave: '9f84b45a6c38210340d8692138bcfd2a89c791350a41680d28362b489a246811',
+    isAuthenticated: true,
+    isKeyMatched: true,
+    totalLatencyMs: 312.4,
+    zeroizedStatus: 0,
+    isHardware: false,
+    hardwareLabel: 'Local Browser Emulation',
+    tilesUsed: 'Simulated Grid',
+  };
+}
+
+export async function runQkdIngressOnHardware(containerJson: string, epoch: number = 1000): Promise<any> {
+  try {
+    const res = await fetch(`${BRIDGE_URL}/api/npu/hybrid/qkd-ingress`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ container_json: containerJson, epoch }),
+    });
+    if (res.ok) return await res.json();
+  } catch {
+    // Fallback
+  }
+  return { status: 0, active_slot: 1, crc32: '0x3E189B4A', key_id: '16fb8915-e50e-4212-8c34-a4b780297f8f', hardware_execution: false };
+}

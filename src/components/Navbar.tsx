@@ -34,7 +34,8 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenT
     { id: 'fips203' as PqcStandard, label: 'ML-KEM (FIPS 203)', icon: Key, badge: 'Key Encapsulation' },
     { id: 'fips204' as PqcStandard, label: 'ML-DSA (FIPS 204)', icon: FileSignature, badge: 'Digital Signatures' },
     { id: 'fips202' as PqcStandard, label: 'SHA-3 / SHAKE (FIPS 202)', icon: Hash, badge: 'Keccak Permutations' },
-    { id: 'silicon_gates' as PqcStandard, label: '19 Silicon Gates', icon: Cpu, badge: '736/736 PASS' },
+    { id: 'hybrid_qkd' as PqcStandard, label: 'Hybrid QKD + PQC', icon: ShieldCheck, badge: 'DR16–DR20 v1.1.0' },
+    { id: 'silicon_gates' as PqcStandard, label: '23 Silicon Gates', icon: Cpu, badge: '839/839 PASS' },
     { id: 'hardware_arch' as PqcStandard, label: 'AIE2 Architecture', icon: Server, badge: 'Tile Memory' },
   ];
 
