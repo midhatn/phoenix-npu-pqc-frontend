@@ -1,5 +1,5 @@
-import React from 'react';
-import { Cpu, ShieldCheck, Key, FileSignature, Hash, Terminal, Server, Sparkles } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Cpu, ShieldCheck, Key, FileSignature, Hash, Terminal, Server, AlertTriangle } from 'lucide-react';
 import { PqcStandard } from '../types';
 
 interface NavbarProps {
@@ -9,6 +9,27 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenTestRunner }) => {
+  const [isBridgeOnline, setIsBridgeOnline] = useState<boolean>(false);
+
+  useEffect(() => {
+    const checkBridge = async () => {
+      try {
+        const res = await fetch('http://localhost:3001/api/status');
+        if (res.ok) {
+          const data = await res.json();
+          setIsBridgeOnline(data.pqc_repo_ready === true);
+        } else {
+          setIsBridgeOnline(false);
+        }
+      } catch {
+        setIsBridgeOnline(false);
+      }
+    };
+    checkBridge();
+    const interval = setInterval(checkBridge, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   const tabs = [
     { id: 'fips203' as PqcStandard, label: 'ML-KEM (FIPS 203)', icon: Key, badge: 'Key Encapsulation' },
     { id: 'fips204' as PqcStandard, label: 'ML-DSA (FIPS 204)', icon: FileSignature, badge: 'Digital Signatures' },
@@ -36,25 +57,36 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenT
                 </span>
               </div>
               <p className="text-xs text-slate-400 font-mono">
-                100% Device-Resident PQC (FIPS 202 / 203 / 204)
+                Device-Resident PQC (FIPS 202 / 203 / 204)
               </p>
             </div>
           </div>
 
           {/* Silicon Status Badge & Test Runner Trigger */}
           <div className="flex items-center space-x-3">
-            <div className="hidden md:flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-emerald-950/50 border border-emerald-800/60 text-xs font-mono text-emerald-400">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>Silicon Certified: 736/736 PASS</span>
-            </div>
+            {isBridgeOnline ? (
+              <div className="hidden md:flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-emerald-950/80 border border-emerald-700/80 text-xs font-mono text-emerald-300 shadow-sm">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="font-semibold">NPU Silicon: Connected</span>
+              </div>
+            ) : (
+              <div className="hidden md:flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono text-slate-400">
+                <span className="w-2 h-2 rounded-full bg-slate-500" />
+                <span>Browser Emulation</span>
+              </div>
+            )}
 
             <button
               id="btn-run-silicon-suite"
               onClick={onOpenTestRunner}
-              className="flex items-center space-x-2 px-3.5 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs font-medium transition shadow-md shadow-cyan-600/30 active:scale-95 cursor-pointer"
+              className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-white font-mono text-xs font-medium transition shadow-md active:scale-95 cursor-pointer ${
+                isBridgeOnline
+                  ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30'
+                  : 'bg-cyan-600 hover:bg-cyan-500 shadow-cyan-600/30'
+              }`}
             >
               <Terminal className="w-3.5 h-3.5" />
-              <span>Run Silicon Suite</span>
+              <span>{isBridgeOnline ? 'Run Silicon Suite' : 'Open Test Runner'}</span>
             </button>
           </div>
         </div>
