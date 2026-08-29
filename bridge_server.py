@@ -108,8 +108,8 @@ def check_npu_hardware():
         "ironenv_ready": GLOBAL_IRONENV.is_file(),
         "pqc_repo_path": str(GLOBAL_PQC_REPO) if GLOBAL_PQC_REPO else "NOT_FOUND",
         "pqc_repo_ready": GLOBAL_PQC_REPO is not None,
-        "gates_certified": 25,
-        "test_cases_total": 851,
+        "gates_certified": 26,
+        "test_cases_total": 857,
         "bridge_version": "1.3.1",
         "status": "ONLINE"
     }
@@ -1176,6 +1176,7 @@ def main():
     print(f"[*] Server Listening: http://{HOST}:{args.port}")
     print("=" * 70)
 
+    http.server.ThreadingHTTPServer.allow_reuse_address = True
     server = http.server.ThreadingHTTPServer((HOST, args.port), PqcBridgeHandler)
     server.serve_forever()
 
