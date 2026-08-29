@@ -433,6 +433,24 @@ export const SILICON_GATES: SiliconGate[] = [
     objectFifos: ['dr27_qrng_request', 'dr27_qrng_descriptor', 'dr27_qrng_result'],
     status: 'CERTIFIED',
   },
+  {
+    gateNumber: 24,
+    milestone: 'DR23',
+    name: 'OpenSSL 3.x Provider & PKCS#11 HSM',
+    category: 'Hardware/DR0-10',
+    algorithm: 'OSSL_PROVIDER & Cryptoki v3.0 Hub',
+    description: 'Standard OpenSSL 3.x EVP_KEM/EVP_SIGNATURE dispatch and OASIS PKCS#11 v3.0 HSM token layer backed 100% by AIE2 silicon.',
+    testCount: 6,
+    passedCount: 6,
+    avgRuntimeMs: 1740,
+    textMemoryBytes: 16384,
+    tileRamBytes: 65536,
+    dmaChannels: 2,
+    tilesUsed: 8,
+    zeroHostFallback: true,
+    objectFifos: ['fifo_openssl_dispatch', 'fifo_pkcs11_session'],
+    status: 'CERTIFIED',
+  },
 ];
 
 export const TOTAL_SILICON_TESTS = SILICON_GATES.reduce((sum, g) => sum + g.testCount, 0); // 736

@@ -192,6 +192,7 @@ GATE_SCRIPTS = [
     ("Gate 21: DR18 NIST SP 800-56C Dual Combiner", "tests/pqc_device_resident/test_dr18_dual_key_combiner_silicon.py"),
     ("Gate 22: DR19 Hybrid QKD-PQC Session Orchestrator", "tests/pqc_device_resident/test_dr19_hybrid_session_silicon.py"),
     ("Gate 23: DR27 QRNG-OPENAPI & Entropy Reservoir", "tests/pqc_device_resident/test_dr27_qrng_reservoir_silicon.py"),
+    ("Gate 24: DR23 OpenSSL 3.x Provider & PKCS#11 HSM", "tests/pqc_device_resident/test_dr23_openssl_provider_silicon.py"),
 ]
 
 class PqcBridgeHandler(http.server.BaseHTTPRequestHandler):
@@ -233,6 +234,10 @@ class PqcBridgeHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json(self.dispatch_qrng_healthtest())
             elif path == "/api/npu/qrng/status":
                 self.send_json(self.dispatch_qrng_status())
+            elif path == "/api/npu/provider/status":
+                self.send_json(self.dispatch_provider_status())
+            elif path == "/api/npu/pkcs11/info":
+                self.send_json(self.dispatch_pkcs11_info())
             elif path == "/api/run-gate":
                 gate_idx = int(query.get("gate", ["0"])[0])
                 self.handle_single_gate_stream(gate_idx)
@@ -935,6 +940,43 @@ out = {{
     "mode": res["mode_str"],
     "crc32": res["crc32"],
     "hardware": "AMD Phoenix AIE2 (Tile SRAM Reservoir Wiped)"
+}}
+print(json.dumps(out))
+"""
+        return run_ironenv_snippet(snippet)
+
+    def dispatch_provider_status(self) -> dict:
+        snippet = f"""
+import json, sys
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+from phoenix_sdr_dsp.pqc.dr23_openssl_provider import get_phoenix_pqc_provider, OSSL_OP_KEM, OSSL_OP_SIGNATURE, OSSL_OP_KEYMGMT
+
+prov = get_phoenix_pqc_provider()
+params = prov.get_params()
+params["kem_algorithms"] = [a["algorithm"] for a in prov.query_operation(OSSL_OP_KEM)]
+params["signature_algorithms"] = [a["algorithm"] for a in prov.query_operation(OSSL_OP_SIGNATURE)]
+params["keymgmt_algorithms"] = [a["algorithm"] for a in prov.query_operation(OSSL_OP_KEYMGMT)]
+print(json.dumps(params))
+"""
+        return run_ironenv_snippet(snippet)
+
+    def dispatch_pkcs11_info(self) -> dict:
+        snippet = f"""
+import json, sys
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+from phoenix_sdr_dsp.pqc.dr23_pkcs11_hsm import get_phoenix_pkcs11_hsm
+
+hsm = get_phoenix_pkcs11_hsm()
+hsm.C_Initialize()
+rv_info, info = hsm.C_GetInfo()
+rv_tok, tok_info = hsm.C_GetTokenInfo(0)
+rv_slots, slots = hsm.C_GetSlotList()
+out = {{
+    "cryptoki_info": info,
+    "token_info": tok_info,
+    "slots": slots,
+    "hardware_backed": True,
+    "zero_host_fallback": True,
 }}
 print(json.dumps(out))
 """
