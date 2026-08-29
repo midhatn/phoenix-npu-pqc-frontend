@@ -11,6 +11,7 @@ import argparse
 import http.server
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -84,7 +85,6 @@ def detect_amd_npu_fast():
             num_subkeys = winreg.QueryInfoKey(pci_key)[0]
             for i in range(num_subkeys):
                 dev_name = winreg.EnumKey(pci_key, i)
-                # AMD Vendor ID 1022 & Device 1502 (Phoenix NPU/IPU)
                 if 'VEN_1022' in dev_name and 'DEV_1502' in dev_name:
                     detected = True
                     name = "AMD NPU Compute Accelerator (VEN_1022 DEV_1502)"
@@ -108,7 +108,7 @@ def check_npu_hardware():
         "pqc_repo_path": str(GLOBAL_PQC_REPO) if GLOBAL_PQC_REPO else "NOT_FOUND",
         "pqc_repo_ready": GLOBAL_PQC_REPO is not None,
         "gates_certified": 19,
-        "test_cases_total": 736,
+        "test_cases_total": 739,
         "bridge_version": "1.0.0",
         "status": "ONLINE"
     }
@@ -144,7 +144,7 @@ class PqcBridgeHandler(http.server.BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache")
-            self.send_header("Connection", "keep-alive")
+            self.send_header("Connection", "close")
             self.send_cors_headers()
             self.end_headers()
 
@@ -178,15 +178,17 @@ class PqcBridgeHandler(http.server.BaseHTTPRequestHandler):
                     universal_newlines=True
                 )
 
-                gate_count = 0
                 for line in iter(proc.stdout.readline, ""):
                     clean_line = line.rstrip()
                     if clean_line:
-                        if "GATE" in clean_line or "[PASS] Gate" in clean_line or "--- PASS:" in clean_line:
-                            gate_count += 1
+                        gate_match = re.search(r'(?:\[\+\]\s*)?Gate\s*(\d+).*?PASS', clean_line, re.IGNORECASE)
+                        is_pass = gate_match is not None
+                        gate_idx = int(gate_match.group(1)) if gate_match else None
+
                         self.send_sse_event("log", json.dumps({
                             "line": clean_line,
-                            "gateCount": gate_count
+                            "isGatePass": is_pass,
+                            "gateIndex": gate_idx
                         }))
 
                 proc.stdout.close()
@@ -196,7 +198,7 @@ class PqcBridgeHandler(http.server.BaseHTTPRequestHandler):
                     "exitCode": return_code,
                     "status": "PASSED" if return_code == 0 else "FAILED",
                     "totalGates": 19,
-                    "totalTests": 736
+                    "totalTests": 739
                 }))
             except Exception as e:
                 self.send_sse_event("error", json.dumps({"error": str(e)}))

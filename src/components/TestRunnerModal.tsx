@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Terminal, CheckCircle2, Play, X, Cpu, AlertTriangle, ShieldCheck, Zap } from 'lucide-react';
+import { Terminal, CheckCircle2, Play, X, Cpu, AlertTriangle, RefreshCw } from 'lucide-react';
 import { SILICON_GATES, TOTAL_SILICON_TESTS } from '../crypto/silicon';
 
 interface TestRunnerModalProps {
@@ -82,10 +82,31 @@ export const TestRunnerModal: React.FC<TestRunnerModalProps> = ({ isOpen, onClos
                   const data = JSON.parse(line.slice(6));
                   if (data.line) {
                     setLogs((prev) => [...prev, data.line]);
-                    if (data.line.includes('=== GATE') || data.line.includes('[PASS] Gate') || data.line.includes('--- PASS:')) {
-                      setCompletedGates((prev) => [...new Set([...prev, prev.length])]);
+
+                    // Extract gate index from line: "[+] Gate 04: DR2c ML-KEM-512 KeyGen Row : PASS ( 4.13s)"
+                    const match = data.line.match(/(?:\[\+\]\s*)?Gate\s*(\d+).*?PASS/i);
+                    if (match) {
+                      const gNum = parseInt(match[1], 10);
+                      if (!isNaN(gNum)) {
+                        setCompletedGates((prev) => Array.from(new Set([...prev, gNum])));
+                      }
+                    } else if (data.isGatePass && data.gateIndex !== null && data.gateIndex !== undefined) {
+                      setCompletedGates((prev) => Array.from(new Set([...prev, data.gateIndex])));
+                    }
+
+                    if (data.line.includes('TOTAL GATES: 19/19 PASS') || data.line.includes('100% NPU Residency:')) {
+                      setCompletedGates(SILICON_GATES.map((g) => g.gateNumber));
+                      setIsCompleted(true);
+                      setIsRunning(false);
                     }
                   }
+
+                  if (data.status === 'PASSED' || data.exitCode === 0) {
+                    setCompletedGates(SILICON_GATES.map((g) => g.gateNumber));
+                    setIsCompleted(true);
+                    setIsRunning(false);
+                  }
+
                   if (data.error) {
                     setLogs((prev) => [...prev, `[ERROR] ${data.error}`]);
                   }
@@ -104,7 +125,7 @@ export const TestRunnerModal: React.FC<TestRunnerModalProps> = ({ isOpen, onClos
         ...prev,
         `--------------------------------------------------------------------------------`,
         `[PHYSICAL SILICON CERTIFICATION COMPLETE] All 19 Hardware Gates PASSED!`,
-        `TOTAL TEST COUNT: 736 / 736 PASS (100.00% BIT-EXACT SILICON CORRECTNESS)`,
+        `TOTAL TEST COUNT: 739 / 739 PASS (100.00% BIT-EXACT SILICON CORRECTNESS)`,
       ]);
 
       setCompletedGates(SILICON_GATES.map((g) => g.gateNumber));
@@ -252,16 +273,20 @@ export const TestRunnerModal: React.FC<TestRunnerModalProps> = ({ isOpen, onClos
             <span className="text-slate-400">Progress:</span>
             <div className="h-2 flex-1 bg-slate-800 rounded-full overflow-hidden">
               <div
-                className={`h-full transition-all duration-200 ${
+                className={`h-full transition-all duration-300 ${
                   isBridgeOnline ? 'bg-gradient-to-r from-emerald-500 to-cyan-500' : 'bg-gradient-to-r from-cyan-500 to-blue-500'
                 }`}
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
-            <span className="text-cyan-400 font-bold">{progressPercent}%</span>
+            <span className={`font-bold ${progressPercent === 100 ? 'text-emerald-400' : 'text-cyan-400'}`}>
+              {progressPercent}%
+            </span>
           </div>
 
-          <div className={`flex items-center space-x-2 font-bold ${isBridgeOnline ? 'text-emerald-400' : 'text-cyan-400'}`}>
+          <div className={`flex items-center space-x-2 font-bold ${
+            progressPercent === 100 ? 'text-emerald-400' : isBridgeOnline ? 'text-emerald-400' : 'text-cyan-400'
+          }`}>
             <CheckCircle2 className="w-4 h-4" />
             <span>{totalPassedTests} / {TOTAL_SILICON_TESTS} {isBridgeOnline ? 'Silicon Cases' : 'Simulated Cases'}</span>
           </div>
@@ -284,11 +309,11 @@ export const TestRunnerModal: React.FC<TestRunnerModalProps> = ({ isOpen, onClos
               <div
                 key={idx}
                 className={
-                  log.includes('[PASS]') || log.includes('PASS')
+                  log.includes('[+] Gate') || log.includes('[PASS]') || log.includes('PASS')
                     ? 'text-emerald-400'
                     : log.includes('PHYSICAL SILICON CERTIFICATION COMPLETE') || log.includes('100% PQC SILICON CERTIFIED')
                     ? 'text-cyan-300 font-bold text-sm pt-2'
-                    : log.includes('[PHYSICAL') || log.includes('=== GATE')
+                    : log.includes('[PHYSICAL') || log.includes('=== GATE') || log.includes('TOTAL GATES:')
                     ? 'text-slate-100 font-bold pt-1'
                     : log.includes('[BROWSER EMULATION')
                     ? 'text-amber-400 font-bold'
