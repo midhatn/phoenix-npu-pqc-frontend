@@ -10,7 +10,7 @@
 ![Target: AMD Phoenix NPU (AIE2 / XDNA1)](https://img.shields.io/badge/Hardware-AMD%20Phoenix%20NPU%20(AIE2)-blue)
 ![Standards: FIPS 202 / 203 / 204](https://img.shields.io/badge/Standards-FIPS%20202%20%2F%20203%20%2F%20204-005ea8)
 ![Silicon Status: 100% Certified](https://img.shields.io/badge/Silicon%20Status-851%2F851%20PASS-brightgreen)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22162273.svg)](https://doi.org/10.5281/zenodo.22162273)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22164124.svg)](https://doi.org/10.5281/zenodo.22164124)
 
 **Modern, interactive web dashboard, cryptographic playground, and real-time hardware execution interface for device-resident Post-Quantum Cryptography & Defense-in-Depth Hybrid QKD on the AMD Phoenix NPU (Ryzen 7 7840HS / Ryzen 9 7940HS / AIE2 / XDNA1 Architecture).**
 
@@ -382,6 +382,10 @@ phoenix-npu-pqc-frontend/
 
 ## 6. Citation & Academic Reference
 
+v1.2.0 Phoenix NPU PQC: Device-Resident Post-Quantum Cryptography on AMD Phoenix NPU
+[DOI: 10.5281/zenodo.22164124](https://doi.org/10.5281/zenodo.22164124)
+[Phoenix NPU PQC & QKD v1.2.0: QRNG-OPENAPI, OpenSSL 3.x Provider & PKCS#11 HSM (25 Gates Silicon Certified)](https://github.com/midhatn/phoenix-npu-pqc/releases/tag/v1.2.0)
+
 If you use or reference this software suite in academic research, technical publications, or hardware security evaluations, please cite:
 
 ```bibtex
@@ -391,7 +395,7 @@ If you use or reference this software suite in academic research, technical publ
   year         = {2026},
   version      = {v1.1.0},
   publisher    = {Zenodo},
-  doi          = {10.5281/zenodo.22162273},
+  doi          = {10.5281/zenodo.22164124},
   url          = {https://github.com/midhatn/phoenix-npu-pqc-frontend}
 }
 ```

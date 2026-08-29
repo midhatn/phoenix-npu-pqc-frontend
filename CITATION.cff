@@ -6,7 +6,7 @@ authors:
     alias: "midhatn"
 title: "Phoenix NPU PQC Frontend: Interactive Web Dashboard & Hardware Playground for AMD Phoenix NPU (AIE2 / XDNA1)"
 version: 1.1.0
-doi: 10.5281/zenodo.22162273
+doi: 10.5281/zenodo.22164124
 date-released: 2026-08-29
 url: "https://github.com/midhatn/phoenix-npu-pqc-frontend"
 repository-code: "https://github.com/midhatn/phoenix-npu-pqc-frontend"
