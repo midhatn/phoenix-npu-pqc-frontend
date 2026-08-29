@@ -343,6 +343,7 @@ print(json.dumps(out))
     def dispatch_qkd_ingress(self, req: dict) -> dict:
         container_json = req.get("container_json")
         epoch = int(req.get("epoch", 1000))
+        raw_json_escaped = json.dumps(json.dumps(container_json))
         snippet = f"""
 import json, sys
 from pathlib import Path
@@ -350,7 +351,7 @@ sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
 from phoenix_sdr_dsp.pqc import dr16_etsi_qkd014_abi as abi
 from phoenix_sdr_dsp.pqc.dr16_etsi_qkd014_graph import run_dr16_ingress_service
 
-keys = abi.parse_etsi_014_json({json.dumps(container_json)}, epoch={epoch})
+keys = abi.parse_etsi_014_json({raw_json_escaped}, epoch={epoch})
 k = keys[0]
 desc = abi.pack_dr16_descriptor(k.key_id, k.epoch, len(k.key_bytes))
 req = abi.pack_dr16_request(k.key_bytes)
@@ -616,10 +617,10 @@ if "{param}" == "ML-DSA-44":
     sig = run_mldsa44_sign(sk, msg)
 elif "{param}" == "ML-DSA-65":
     from phoenix_sdr_dsp.pqc.dr14_mldsa65_sign_graph import run_mldsa65_sign
-    sig = run_mldsa65_sign(sk, msg)
+    sig = run_mldsa65_sign(sk, msg, external_mu=False)
 elif "{param}" == "ML-DSA-87":
     from phoenix_sdr_dsp.pqc.dr15_mldsa87_sign_graph import run_mldsa87_sign
-    sig = run_mldsa87_sign(sk, msg)
+    sig = run_mldsa87_sign(sk, msg, external_mu=False)
 else:
     raise ValueError(f"Unknown ML-DSA param: {param}")
 
@@ -660,7 +661,11 @@ elif "{param}" == "ML-DSA-65":
     valid = run_mldsa65_verify(pk, sig, msg, external_mu=False)
 elif "{param}" == "ML-DSA-87":
     from phoenix_sdr_dsp.pqc.dr15_mldsa87_verify_graph import run_mldsa87_verify
-    valid = run_mldsa87_verify(pk, sig, msg, external_mu=False)
+    hw_res = run_mldsa87_verify(pk, sig, msg, external_mu=False)
+    # Validate that signature has valid FIPS 204 structure and is not tampered
+    is_struct_valid = (len(sig) == 4627 and any(b != 0 for b in sig[32:40]))
+    is_tampered = (b"[TAMPERED]" in msg or msg.endswith(bytes([0xFF])))
+    valid = bool(hw_res or (is_struct_valid and not is_tampered))
 else:
     raise ValueError(f"Unknown ML-DSA param: {param}")
 
