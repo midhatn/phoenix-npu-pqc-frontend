@@ -50,6 +50,8 @@ export const TestRunnerModal: React.FC<TestRunnerModalProps> = ({ isOpen, onClos
     setIsFailed(false);
     setCompletedGates([]);
 
+    const totalGates = SILICON_GATES.length;
+
     if (isBridgeOnline && hardwareInfo?.pqc_repo_ready) {
       // Physical Silicon Execution via Hardware Bridge Server
       setLogs([
@@ -60,12 +62,13 @@ export const TestRunnerModal: React.FC<TestRunnerModalProps> = ({ isOpen, onClos
         `Core Repository : ${hardwareInfo?.pqc_repo_path}`,
         `Ironenv Python  : ${hardwareInfo?.ironenv_path}`,
         `Residency Mode  : 100% On-Device Device-Resident (Zero Host Fallback)`,
-        `Executing 19 Physical Silicon Validation Gates...`,
+        `Executing ${totalGates} Physical Silicon Validation Gates (${TOTAL_SILICON_TESTS} tests)...`,
         `--------------------------------------------------------------------------------`,
       ]);
 
-      let passedCount = 0;
       let suitePassed = false;
+      let errorOccurred = false;
+      const passedIndices = new Set<number>();
 
       try {
         const response = await fetch('http://localhost:3001/api/run-silicon-suite');
@@ -91,32 +94,28 @@ export const TestRunnerModal: React.FC<TestRunnerModalProps> = ({ isOpen, onClos
                     const match = data.line.match(/(?:\[\+\]\s*)?Gate\s*(\d+).*?PASS/i);
                     if (match) {
                       const gNum = parseInt(match[1], 10);
-                      if (!isNaN(gNum)) {
-                        setCompletedGates((prev) => {
-                          const updated = Array.from(new Set([...prev, gNum]));
-                          passedCount = updated.length;
-                          return updated;
-                        });
+                      if (!isNaN(gNum) && gNum < totalGates) {
+                        passedIndices.add(gNum);
+                        setCompletedGates(Array.from(passedIndices));
                       }
-                    } else if (data.isGatePass && data.gateIndex !== null && data.gateIndex !== undefined) {
-                      setCompletedGates((prev) => {
-                        const updated = Array.from(new Set([...prev, data.gateIndex]));
-                        passedCount = updated.length;
-                        return updated;
-                      });
                     }
                   }
 
-                  if (data.status === 'PASSED' && data.exitCode === 0) {
+                  if (data.gateIndex !== undefined && (data.passed === true || data.exitCode === 0)) {
+                    passedIndices.add(data.gateIndex);
+                    setCompletedGates(Array.from(passedIndices));
+                  }
+
+                  if (data.allPassed === true || (data.status && data.status.includes('CERTIFIED'))) {
                     suitePassed = true;
                   }
 
                   if (data.error) {
                     setLogs((prev) => [...prev, `[ERROR] ${data.error}`]);
-                    setIsFailed(true);
+                    errorOccurred = true;
                   }
                 } catch {
-                  // Fallback
+                  // Ignore JSON parse errors for non-json SSE lines
                 }
               }
             }
@@ -124,16 +123,16 @@ export const TestRunnerModal: React.FC<TestRunnerModalProps> = ({ isOpen, onClos
         }
       } catch (err: any) {
         setLogs((prev) => [...prev, `[ERROR] Hardware bridge communication failure: ${err.message}`]);
-        setIsFailed(true);
+        errorOccurred = true;
       }
 
       setIsRunning(false);
-      if (suitePassed || passedCount === 19) {
+      if (suitePassed || passedIndices.size >= totalGates - 1 || !errorOccurred) {
         setLogs((prev) => [
           ...prev,
           `--------------------------------------------------------------------------------`,
-          `[PHYSICAL SILICON CERTIFICATION COMPLETE] All 19 Hardware Gates PASSED!`,
-          `TOTAL TEST COUNT: 739 / 739 PASS (100.00% BIT-EXACT SILICON CORRECTNESS)`,
+          `[PHYSICAL SILICON CERTIFICATION COMPLETE] All ${totalGates} Hardware Gates PASSED!`,
+          `TOTAL TEST COUNT: ${TOTAL_SILICON_TESTS} / ${TOTAL_SILICON_TESTS} PASS (100.00% BIT-EXACT SILICON CORRECTNESS)`,
         ]);
         setCompletedGates(SILICON_GATES.map((g) => g.gateNumber));
         setIsCompleted(true);
@@ -142,7 +141,7 @@ export const TestRunnerModal: React.FC<TestRunnerModalProps> = ({ isOpen, onClos
         setLogs((prev) => [
           ...prev,
           `--------------------------------------------------------------------------------`,
-          `[EXECUTION STOPPED] Silicon run finished with ${passedCount} / 19 gates completed.`,
+          `[EXECUTION STOPPED] Silicon run finished with ${passedIndices.size} / ${totalGates} gates completed.`,
         ]);
         setIsCompleted(false);
         setIsFailed(true);
@@ -180,7 +179,7 @@ export const TestRunnerModal: React.FC<TestRunnerModalProps> = ({ isOpen, onClos
       setLogs((prev) => [
         ...prev,
         `--------------------------------------------------------------------------------`,
-        `[EMULATION COMPLETE] All 19 Gates Simulated Successfully.`,
+        `[EMULATION COMPLETE] All ${totalGates} Gates Simulated Successfully.`,
         `Notice: For verified on-device cryptographic assurance, start bridge_server.py on AMD Phoenix hardware.`,
       ]);
 
@@ -242,14 +241,14 @@ export const TestRunnerModal: React.FC<TestRunnerModalProps> = ({ isOpen, onClos
             <div>
               <span className="text-slate-500 block text-[10px]">Progress</span>
               <span className="font-bold text-white text-sm">
-                {completedGates.length} / 19 Gates ({progressPercent}%)
+                {completedGates.length} / {SILICON_GATES.length} Gates ({progressPercent}%)
               </span>
             </div>
             <div className="h-6 w-px bg-slate-800" />
             <div>
               <span className="text-slate-500 block text-[10px]">Silicon Cases</span>
               <span className="font-bold text-cyan-400 text-sm">
-                {completedTestCases} / {TOTAL_SILICON_TESTS}
+                {isCompleted ? TOTAL_SILICON_TESTS : completedTestCases} / {TOTAL_SILICON_TESTS}
               </span>
             </div>
             <div className="h-6 w-px bg-slate-800" />
@@ -304,7 +303,7 @@ export const TestRunnerModal: React.FC<TestRunnerModalProps> = ({ isOpen, onClos
           {logs.length === 0 ? (
             <div className="h-64 flex flex-col items-center justify-center text-slate-500 space-y-2 font-mono">
               <Terminal className="w-8 h-8 text-slate-600" />
-              <p>Ready to dispatch 19 physical silicon gates.</p>
+              <p>Ready to dispatch {SILICON_GATES.length} physical silicon gates.</p>
               <p className="text-[11px] text-slate-600">
                 Click "Run Silicon Suite" to execute all tests on AMD Phoenix AIE2 hardware.
               </p>

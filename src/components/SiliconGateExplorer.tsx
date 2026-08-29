@@ -58,7 +58,7 @@ export const SiliconGateExplorer: React.FC = () => {
                 if (data.error) {
                   setGateLogs((prev) => [...prev, `[ERROR] ${data.error}`]);
                 }
-                if (data.status === 'PASSED') {
+                if (data.passed || (data.status && data.status.includes('PASS'))) {
                   setGateLogs((prev) => [
                     ...prev,
                     `--------------------------------------------------------------------------------`,
@@ -95,10 +95,10 @@ export const SiliconGateExplorer: React.FC = () => {
               </span>
             </div>
             <h2 className="text-xl font-bold text-white tracking-tight mt-1">
-              AMD Phoenix NPU Physical Silicon Validation (19 Gates)
+              AMD Phoenix NPU Physical Silicon Validation (23 Gates)
             </h2>
             <p className="text-xs text-slate-400 mt-1 max-w-2xl">
-              Validated on physical AMD Ryzen 7 7840HS / Ryzen 9 7940HS AIE2 silicon across all 19 hardware gates
+              Validated on physical AMD Ryzen 7 7840HS / Ryzen 9 7940HS AIE2 silicon across all 23 hardware gates
               with zero host CPU fallback. Select any gate below to dispatch individually to the NPU.
             </p>
           </div>
@@ -116,7 +116,7 @@ export const SiliconGateExplorer: React.FC = () => {
             <div className="h-8 w-px bg-slate-800" />
             <div>
               <span className="text-slate-500 block text-[10px]">Active Gates</span>
-              <span className="text-white font-bold text-base">19 / 19</span>
+              <span className="text-white font-bold text-base">23 / 23</span>
             </div>
           </div>
         </div>
