@@ -8,7 +8,8 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6.svg)
 ![Target: AMD Phoenix NPU (AIE2 / XDNA1)](https://img.shields.io/badge/Hardware-AMD%20Phoenix%20NPU1%20(AIE2)-blue)
 ![Standards: FIPS 202 / 203 / 204](https://img.shields.io/badge/Standards-FIPS%20202%20%2F%20203%20%2F%20204-005ea8)
-![Status: 100% PQC Silicon Certified](https://img.shields.io/badge/Silicon%20Status-736%2F736%20PASS-brightgreen)
+![Status: 100% Silicon Certified](https://img.shields.io/badge/Silicon%20Status-839%2F839%20PASS-brightgreen)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22160353.svg)](https://doi.org/10.5281/zenodo.22160353)
 
 **Modern, interactive web dashboard, cryptographic playground, and real-time hardware execution interface for device-resident Post-Quantum Cryptography on the AMD Phoenix NPU (Ryzen 7 7840HS / Ryzen 9 7940HS / AIE2 / XDNA1 Architecture).**
 
@@ -41,8 +42,8 @@ This repository provides the official interactive frontend and developer suite f
                                                          │
          ┌─────────────────────────┬─────────────────────┼─────────────────────┬────────────────────────┐
          ▼                         ▼                     ▼                     ▼                        ▼
-  [ML-KEM (FIPS 203)]    [ML-DSA (FIPS 204)]    [SHA-3 (FIPS 202)]    [19 Silicon Gates]    [AIE2 Hardware Layout]
-   • KeyGen/Encaps/Decaps • KeyGen/Sign/Verify   • SHA3-224..512       • 736 Test Cases      • 4x4 Tile Matrix
+  [ML-KEM (FIPS 203)]    [ML-DSA (FIPS 204)]    [SHA-3 (FIPS 202)]    [23 Silicon Gates]    [AIE2 Hardware Layout]
+   • KeyGen/Encaps/Decaps • KeyGen/Sign/Verify   • SHA3-224..512       • 839 Test Cases      • 4x4 Tile Matrix
    • Ciphertext Tampering • Message Tampering    • SHAKE128/256        • Memory Budgets      • Memory Scrubber
    • CCA2 Implicit Rej.   • Rejection Loops      • Keccak-f[1600]      • DMA Limits          • DR10 Zeroization
 ```
