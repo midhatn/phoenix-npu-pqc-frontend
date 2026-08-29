@@ -1,0 +1,66 @@
+name: PQC native evidence failure
+description: Record a bounded native or physical PQC result without recasting it as a completed residency claim.
+title: "[pqc native] "
+labels: ["bug", "pqc", "native-evidence"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form only for an already authorized, independently reproducible native result. Do not attach secrets or unredacted sensitive captures. A compile-only result is not a physical pass. The retained DR2d result is `TOTAL 0/25 FAIL`; do not overwrite or reinterpret its protected evidence.
+  - type: dropdown
+    id: research_area
+    attributes:
+      label: Research area
+      options:
+        - M32 ML-KEM historical foundation
+        - M33 ML-DSA historical foundation
+        - DR0
+        - DR1
+        - DR2a
+        - DR2b
+        - DR2c
+        - DR2d integrated ML-KEM KeyGen
+        - Other bounded PQC work
+    validations:
+      required: true
+  - type: dropdown
+    id: evidence_class
+    attributes:
+      label: Evidence class
+      options:
+        - Compile-only
+        - Native runtime unavailable
+        - Physical exact-output failure
+        - Physical exact-output pass candidate
+        - Toolchain or driver failure
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Exact scope, corpus, and oracle
+      description: Identify the operation, parameter set, input corpus hash or provenance, expected terminal result, and independent oracle.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Native environment
+      description: Include OS build, NPU model, driver, firmware, XRT, MLIR-AIE, and LLVM-AIE/Peano versions.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: command_output
+    attributes:
+      label: Exact command and redacted output
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: provenance
+    attributes:
+      label: Provenance and claim boundary
+      description: State commit, generated artifact hashes, evidence location, and why this result does or does not change an existing roadmap decision.
+    validations:
+      required: true
