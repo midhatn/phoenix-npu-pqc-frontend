@@ -1,36 +1,24 @@
 cff-version: 1.2.0
-message: "If you use this frontend software, please cite it using the metadata below."
-title: "AMD Phoenix NPU PQC Suite: Interactive Frontend & Hardware Dashboard"
-abstract: "An interactive web dashboard, cryptographic playground, and physical silicon dispatch interface for device-resident Post-Quantum Cryptography (FIPS 202 SHA-3/SHAKE, FIPS 203 ML-KEM, and FIPS 204 ML-DSA) on the AMD Phoenix NPU (Ryzen 7 7840HS / Ryzen 9 7940HS w/ AIE2 / XDNA1 Architecture)."
-type: software
-version: "1.0.0"
-date-released: "2026-08-29"
+message: "If you use this software in your research or application, please cite it using the metadata from this file."
 authors:
   - family-names: "Nashar"
     given-names: "Midhat"
-    alias: "midhatn"
-repository-code: "https://github.com/midhatn/phoenix-npu-pqc-frontend"
+title: "Phoenix NPU PQC Frontend: Interactive Web Dashboard & Hardware Playground for AMD Phoenix NPU (AIE2 / XDNA1)"
+version: 1.1.0
+doi: 10.5281/zenodo.22162273
+date-released: 2026-08-29
 url: "https://github.com/midhatn/phoenix-npu-pqc-frontend"
-license: Apache-2.0
+repository-code: "https://github.com/midhatn/phoenix-npu-pqc-frontend"
+license: "Apache-2.0"
 keywords:
-  - "post-quantum cryptography"
+  - "post-quantum-cryptography"
+  - "quantum-key-distribution"
+  - "amd-phoenix"
+  - "npu"
+  - "aie2"
+  - "xdna1"
   - "react"
   - "vite"
-  - "tailwind css"
-  - "ML-KEM"
-  - "ML-DSA"
-  - "FIPS 202"
-  - "FIPS 203"
-  - "FIPS 204"
-  - "AMD Ryzen AI"
-  - "Phoenix NPU"
-  - "AIE2"
-  - "hardware dashboard"
-references:
-  - type: software
-    title: "Phoenix NPU PQC: Device-Resident Post-Quantum Cryptography on AMD Phoenix NPU"
-    authors:
-      - family-names: "Nashar"
-        given-names: "Midhat"
-    repository-code: "https://github.com/midhatn/phoenix-npu-pqc"
-    doi: "10.5281/zenodo.22160353"
+  - "fips-202"
+  - "fips-203"
+  - "fips-204"

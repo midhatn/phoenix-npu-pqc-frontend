@@ -9,7 +9,7 @@
 ![Target: AMD Phoenix NPU (AIE2 / XDNA1)](https://img.shields.io/badge/Hardware-AMD%20Phoenix%20NPU1%20(AIE2)-blue)
 ![Standards: FIPS 202 / 203 / 204](https://img.shields.io/badge/Standards-FIPS%20202%20%2F%20203%20%2F%20204-005ea8)
 ![Status: 100% Silicon Certified](https://img.shields.io/badge/Silicon%20Status-839%2F839%20PASS-brightgreen)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22160353.svg)](https://doi.org/10.5281/zenodo.22160353)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22162273.svg)](https://doi.org/10.5281/zenodo.22162273)
 
 **Modern, interactive web dashboard, cryptographic playground, and real-time hardware execution interface for device-resident Post-Quantum Cryptography on the AMD Phoenix NPU (Ryzen 7 7840HS / Ryzen 9 7940HS / AIE2 / XDNA1 Architecture).**
 
@@ -199,7 +199,7 @@ For complete technical specifications, mathematical soundness proofs, and tile m
 This frontend is part of the **AMD Phoenix NPU Post-Quantum Cryptography Research Initiative**:
 
 * **Core Hardware Engine**: [`https://github.com/midhatn/phoenix-npu-pqc`](https://github.com/midhatn/phoenix-npu-pqc) (Silicon certified across 736/736 test cases).
-* **DOI**: [10.5281/zenodo.22160353](https://doi.org/10.5281/zenodo.22160353)
+* **DOI**: [10.5281/zenodo.22162273](https://doi.org/10.5281/zenodo.22162273)
 
 ```bibtex
 @software{nashar2026phoenix_frontend,
