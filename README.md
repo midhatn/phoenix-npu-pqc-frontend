@@ -2,14 +2,14 @@
 
 <div align="center">
 
-![Release: v1.1.0](https://img.shields.io/badge/Release-v1.1.0-blueviolet.svg)
+![Release: v1.1.0](https://img.shields.io/badge/Release-v1.2.0-blueviolet.svg)
 ![React: 19](https://img.shields.io/badge/React-19-blue.svg)
 ![Vite: 6](https://img.shields.io/badge/Vite-6-646CFF.svg)
 ![Tailwind CSS: 4](https://img.shields.io/badge/Tailwind_CSS-v4-38B2AC.svg)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6.svg)
 ![Target: AMD Phoenix NPU (AIE2 / XDNA1)](https://img.shields.io/badge/Hardware-AMD%20Phoenix%20NPU%20(AIE2)-blue)
 ![Standards: FIPS 202 / 203 / 204](https://img.shields.io/badge/Standards-FIPS%20202%20%2F%20203%20%2F%20204-005ea8)
-![Silicon Status: 100% Certified](https://img.shields.io/badge/Silicon%20Status-839%2F839%20PASS-brightgreen)
+![Silicon Status: 100% Certified](https://img.shields.io/badge/Silicon%20Status-851%2F851%20PASS-brightgreen)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22162273.svg)](https://doi.org/10.5281/zenodo.22162273)
 
 **Modern, interactive web dashboard, cryptographic playground, and real-time hardware execution interface for device-resident Post-Quantum Cryptography & Defense-in-Depth Hybrid QKD on the AMD Phoenix NPU (Ryzen 7 7840HS / Ryzen 9 7940HS / AIE2 / XDNA1 Architecture).**
@@ -33,8 +33,8 @@
    * [Tab 1: ML-KEM (FIPS 203) — Key Encapsulation Playground](#32-tab-1-ml-kem-fips-203--key-encapsulation-playground)
    * [Tab 2: ML-DSA (FIPS 204) — Digital Signatures Playground](#33-tab-2-ml-dsa-fips-204--digital-signatures-playground)
    * [Tab 3: SHA-3 / SHAKE (FIPS 202) — Keccak-f[1600] Permutation Engine](#34-tab-3-sha-3--shake-fips-202--keccak-f1600-permutation-engine)
-   * [Tab 4: Hybrid QKD + PQC Hardware Studio (DR16–DR20 v1.1.0)](#35-tab-4-hybrid-qkd--pqc-hardware-studio-dr16dr20-v110)
-   * [Tab 5: 23 Silicon Gates Explorer](#36-tab-5-23-silicon-gates-explorer)
+   * [Tab 4: Hybrid QKD + PQC Hardware Studio (DR16–DR27 v1.2.0)](#35-tab-4-hybrid-qkd--pqc-hardware-studio-dr16dr20-v110)
+   * [Tab 5: 25 Silicon Gates Explorer](#36-tab-5-23-silicon-gates-explorer)
    * [Tab 6: AIE2 Microarchitecture & DR10 Sealed Lifecycle Inspector](#37-tab-6-aie2-microarchitecture--dr10-sealed-lifecycle-inspector)
    * [Master Silicon Suite Test Runner Modal](#38-master-silicon-suite-test-runner-modal)
 4. [Architecture & Hardware Bridge Overview](#4-architecture--hardware-bridge-overview)
@@ -52,7 +52,7 @@ The **AMD Phoenix NPU PQC Frontend Suite** provides a responsive, web-based user
 * **100% Device-Resident Silicon Execution**: Dispatches quantum-safe lattice arithmetic directly to the 16-tile AI Engine (AIE2 / XDNA1) compute matrix with **Zero Host CPU Fallback**.
 * **NIST FIPS Final Standards**: Full support for FIPS 202 (SHA-3/SHAKE), FIPS 203 (ML-KEM-512/768/1024), and FIPS 204 (ML-DSA-44/65/87).
 * **Hybrid QKD Defense-in-Depth (Milestone DR16–DR20)**: Fuses optical quantum keys (ETSI GS QKD 014) with post-quantum lattice keys via NIST SP 800-56C Dual-PRF combiners directly in tile memory.
-* **Master Silicon Suite Validation**: Real-time streaming runner executing **all 23 hardware validation gates (839 / 839 test cases)** in ~28 seconds.
+* **Master Silicon Suite Validation**: Real-time streaming runner executing **all 25 hardware validation gates (851 / 851 test cases)** in ~28 seconds.
 
 ---
 
@@ -129,7 +129,7 @@ The bridge server will automatically:
 +---------------------------------------------------------------------------------------------------------+
 |  [Logo] AMD Phoenix NPU (XDNA1 · AIE2)                [● NPU Silicon: Connected]  [>_ Run Silicon Suite] |
 +---------------------------------------------------------------------------------------------------------+
-|  [<] [Key ML-KEM]  [Doc ML-DSA]  [# SHA-3]  [Shield Hybrid QKD]  [Cpu 23 Silicon Gates]  [Server AIE2] [>]  |
+|  [<] [Key ML-KEM]  [Doc ML-DSA]  [# SHA-3]  [Shield Hybrid QKD]  [Cpu 25 Silicon Gates]  [Server AIE2] [>]  |
 +---------------------------------------------------------------------------------------------------------+
 ```
 
@@ -138,7 +138,7 @@ The bridge server will automatically:
 ### 3.1. Top Navigation & Control Header
 
 * **Hardware Indicator**: Displays `NPU Silicon: Connected` when `bridge_server.py` is active, or `Browser Emulation` when running standalone.
-* **`Run Silicon Suite` Button**: Opens the global terminal modal that dispatches all 23 hardware validation gates.
+* **`Run Silicon Suite` Button**: Opens the global terminal modal that dispatches all 25 hardware validation gates.
 * **Scrollable Tab Strip**: Includes interactive `<` and `>` arrow buttons and mousewheel scrolling to navigate across all 6 modules on any screen size.
 
 ---
@@ -223,7 +223,7 @@ The **Keccak Engine** showcases hardware acceleration of the 24-round `Keccak-p[
 
 ---
 
-### 3.5. Tab 4: Hybrid QKD + PQC Hardware Studio (DR16–DR20 v1.1.0)
+### 3.5. Tab 4: Hybrid QKD + PQC Hardware Studio (DR16–DR27 v1.2.0)
 
 The **Hybrid QKD + PQC Studio** demonstrates quantum defense-in-depth by fusing optical Quantum Key Distribution with Post-Quantum lattice algorithms.
 
@@ -256,13 +256,13 @@ The **Hybrid QKD + PQC Studio** demonstrates quantum defense-in-depth by fusing 
 
 ---
 
-### 3.6. Tab 5: 23 Silicon Gates Explorer
+### 3.6. Tab 5: 25 Silicon Gates Explorer
 
-The **Silicon Gates Explorer** provides an interactive directory of all 23 hardware validation gates.
+The **Silicon Gates Explorer** provides an interactive directory of all 25 hardware validation gates.
 
 ```
 +-----------------------------------------------------------------------------------+
-| Total Tests: 839 / 839   |   Pass Rate: 100.00%   |   Active Silicon Gates: 23 / 23 |
+| Total Tests: 851 / 851   |   Pass Rate: 100.00%   |   Active Silicon Gates: 23 / 23 |
 | Filter: [ALL] [FIPS 203] [FIPS 204] [FIPS 202] [Hardware/DR0-10] [Search...]      |
 +-----------------------------------------------------------------------------------+
 ```
@@ -300,7 +300,7 @@ Clicking **"Run Silicon Suite"** in the navigation header launches the automated
 
 ```
 +-----------------------------------------------------------------------------------+
-| Progress: 23 / 23 Gates (100%)  |  Silicon Cases: 839 / 839  |  Status: PASSED    |
+| Progress: 23 / 23 Gates (100%)  |  Silicon Cases: 851 / 851  |  Status: PASSED    |
 +-----------------------------------------------------------------------------------+
 | [+] Gate 00: DR0 M33 Ring Product                        : PASS ( 0.92s)          |
 | [+] Gate 01: DR1 ML-DSA-44 ExpandA                       : PASS ( 0.77s)          |
@@ -366,7 +366,7 @@ phoenix-npu-pqc-frontend/
     │   ├── keccak.ts              # FIPS 202 SHA-3 & SHAKE browser emulation engine
     │   ├── mlkem.ts               # FIPS 203 ML-KEM browser emulation engine
     │   ├── mldsa.ts               # FIPS 204 ML-DSA browser emulation engine
-    │   └── silicon.ts             # 23 Silicon Gates specifications & test metadata
+    │   └── silicon.ts             # 25 Silicon Gates specifications & test metadata
     └── components/
         ├── Navbar.tsx             # Responsive header with horizontal scroll & arrows
         ├── MlkemPlayground.tsx    # Interactive ML-KEM playground with CCA2 tampering

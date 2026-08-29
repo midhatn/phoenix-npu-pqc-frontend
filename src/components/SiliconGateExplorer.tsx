@@ -95,7 +95,7 @@ export const SiliconGateExplorer: React.FC = () => {
               </span>
             </div>
             <h2 className="text-xl font-bold text-white tracking-tight mt-1">
-              AMD Phoenix NPU Physical Silicon Validation (23 Gates)
+              AMD Phoenix NPU Physical Silicon Validation (25 Gates)
             </h2>
             <p className="text-xs text-slate-400 mt-1 max-w-2xl">
               Validated on physical AMD Ryzen 7 7840HS / Ryzen 9 7940HS AIE2 silicon across all 23 hardware gates

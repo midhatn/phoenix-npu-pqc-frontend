@@ -167,7 +167,7 @@ export const HybridQkdPlayground: React.FC = () => {
           <div>
             <div className="flex flex-wrap items-center gap-2.5">
               <span className="px-3 py-1 text-xs font-semibold uppercase tracking-wider bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-full flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5" /> Milestone DR16–DR20 (v1.1.0)
+                <ShieldCheck className="w-3.5 h-3.5" /> Milestone DR16–DR20 (v1.2.0)
               </span>
               <span className="px-3 py-1 text-xs font-semibold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />

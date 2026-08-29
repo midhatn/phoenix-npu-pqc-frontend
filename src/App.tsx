@@ -39,7 +39,7 @@ export const App: React.FC = () => {
             <span>100% On-Device Device-Resident PQC (FIPS 202/203/204)</span>
           </div>
           <div>
-            <span>Validated across 23 Gates (839/839 PASS) on AIE2 Physical Silicon (PQC + QKD v1.1.0)</span>
+            <span>Validated across 25 Gates (851/851 PASS) on AIE2 Physical Silicon (PQC + QKD v1.2.0)</span>
           </div>
         </div>
       </footer>
