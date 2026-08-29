@@ -3,6 +3,7 @@ export type PqcStandard = 'fips203' | 'fips204' | 'fips202' | 'silicon_gates' | 
 export type MlkemParameterSet = 'ML-KEM-512' | 'ML-KEM-768' | 'ML-KEM-1024';
 export type MldsaParameterSet = 'ML-DSA-44' | 'ML-DSA-65' | 'ML-DSA-87';
 export type KeccakFunction = 'SHA3-224' | 'SHA3-256' | 'SHA3-384' | 'SHA3-512' | 'SHAKE128' | 'SHAKE256';
+export type KeccakAlgorithm = KeccakFunction;
 
 export interface SiliconGate {
   gateNumber: number;
@@ -73,6 +74,16 @@ export interface MldsaVerifyResult {
   verifyTimeMs: number;
   npuCycles: number;
   details: string;
+}
+
+export interface KeccakResult {
+  algorithm: KeccakAlgorithm;
+  digestHex: string;
+  digestBytes: number;
+  blocksAbsorbed: number;
+  paddedLengthBytes: number;
+  computeTimeMs: number;
+  npuCycles: number;
 }
 
 export interface TestExecutionResult {

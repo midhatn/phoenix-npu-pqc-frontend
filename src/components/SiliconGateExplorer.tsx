@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { Cpu, ShieldCheck, CheckCircle2, Search, Zap, Layers, Server, ArrowRight, Activity } from 'lucide-react';
-import { SILICON_GATES, TOTAL_SILICON_TESTS, TOTAL_SILICON_PASSED } from '../crypto/silicon';
+import { Cpu, ShieldCheck, CheckCircle2, Search, Zap, Layers, Server, ArrowRight, Activity, Play, Terminal, X, RefreshCw } from 'lucide-react';
+import { SILICON_GATES, TOTAL_SILICON_TESTS } from '../crypto/silicon';
 import { SiliconGate } from '../types';
 
 export const SiliconGateExplorer: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeGate, setActiveGate] = useState<SiliconGate | null>(SILICON_GATES[0]);
+  const [runningGateIdx, setRunningGateIdx] = useState<number | null>(null);
+  const [gateLogs, setGateLogs] = useState<string[]>([]);
+  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
 
   const categories = ['ALL', 'FIPS 203', 'FIPS 204', 'FIPS 202', 'Hardware/DR0-10'];
 
@@ -18,6 +21,63 @@ export const SiliconGateExplorer: React.FC = () => {
       gate.algorithm.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCat && matchesSearch;
   });
+
+  const handleRunSingleGate = async (gateIdx: number) => {
+    setRunningGateIdx(gateIdx);
+    setIsDrawerOpen(true);
+    const gate = SILICON_GATES.find((g) => g.gateNumber === gateIdx) || SILICON_GATES[gateIdx];
+
+    setGateLogs([
+      `[DISPATCHING GATE ${gateIdx}: ${gate.milestone} - ${gate.name}]`,
+      `Target Hardware: AMD Phoenix NPU (Ryzen 7 7840HS / Ryzen 9 7940HS w/ AIE2 / XDNA1)`,
+      `Connecting to Local Hardware Bridge on port 3001...`,
+      `--------------------------------------------------------------------------------`,
+    ]);
+
+    try {
+      const response = await fetch(`http://localhost:3001/api/run-gate?gate=${gateIdx}`);
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (reader) {
+        let buffer = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.line) {
+                  setGateLogs((prev) => [...prev, data.line]);
+                }
+                if (data.error) {
+                  setGateLogs((prev) => [...prev, `[ERROR] ${data.error}`]);
+                }
+                if (data.status === 'PASSED') {
+                  setGateLogs((prev) => [
+                    ...prev,
+                    `--------------------------------------------------------------------------------`,
+                    `[PASS] Gate ${gateIdx} passed all ${gate.testCount} test cases on physical AIE2 silicon!`,
+                  ]);
+                }
+              } catch {
+                // Fallback
+              }
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      setGateLogs((prev) => [...prev, `[ERROR] Bridge connection error: ${err.message}. Make sure 'python bridge_server.py' is running.`]);
+    } finally {
+      setRunningGateIdx(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -39,7 +99,7 @@ export const SiliconGateExplorer: React.FC = () => {
             </h2>
             <p className="text-xs text-slate-400 mt-1 max-w-2xl">
               Validated on physical AMD Ryzen 7 7840HS / Ryzen 9 7940HS AIE2 silicon across all 19 hardware gates
-              with 0 host CPU fallback in 24.68 seconds total runtime.
+              with zero host CPU fallback. Select any gate below to dispatch individually to the NPU.
             </p>
           </div>
 
@@ -81,162 +141,206 @@ export const SiliconGateExplorer: React.FC = () => {
           </div>
 
           <div className="relative w-full sm:w-64">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              id="input-gate-search"
-              placeholder="Search gates or algorithms..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-slate-200 focus:outline-none focus:border-cyan-500"
+              placeholder="Search gates or milestones..."
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-mono transition"
             />
           </div>
         </div>
       </div>
 
-      {/* Main Grid & Details Split */}
+      {/* Main Grid: Gate Table + Selected Gate Inspector */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Gate List */}
-        <div className="lg:col-span-2 space-y-2.5 max-h-[680px] overflow-y-auto pr-1">
-          {filteredGates.map((gate) => {
-            const isSelected = activeGate?.gateNumber === gate.gateNumber;
-            return (
-              <div
-                key={gate.gateNumber}
-                id={`gate-card-${gate.gateNumber}`}
-                onClick={() => setActiveGate(gate)}
-                className={`p-4 rounded-xl border transition-all cursor-pointer ${
-                  isSelected
-                    ? 'bg-slate-900 border-cyan-500 shadow-md shadow-cyan-500/10'
-                    : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900/90'
-                }`}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center space-x-2.5">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-slate-950 font-mono text-xs font-bold text-cyan-400 border border-slate-800">
-                      G{gate.gateNumber}
-                    </span>
+        {/* Gates Table (2 Cols) */}
+        <div className="lg:col-span-2 bg-slate-900/80 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+          <div className="px-5 py-3.5 border-b border-slate-800 bg-slate-950/40 flex items-center justify-between">
+            <span className="text-xs font-mono font-bold text-slate-300">
+              Hardware Gates ({filteredGates.length} matching)
+            </span>
+            <span className="text-[11px] font-mono text-slate-500">
+              Click any gate to inspect or dispatch individually
+            </span>
+          </div>
+
+          <div className="divide-y divide-slate-800/80 max-h-[580px] overflow-y-auto font-mono text-xs">
+            {filteredGates.map((gate) => {
+              const isSelected = activeGate?.gateNumber === gate.gateNumber;
+
+              return (
+                <div
+                  key={gate.gateNumber}
+                  id={`gate-row-${gate.gateNumber}`}
+                  onClick={() => setActiveGate(gate)}
+                  className={`p-4 flex items-center justify-between transition cursor-pointer hover:bg-slate-800/50 ${
+                    isSelected ? 'bg-slate-800/80 border-l-4 border-cyan-400' : ''
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center font-bold text-cyan-400 text-xs">
+                      {gate.gateNumber.toString().padStart(2, '0')}
+                    </div>
                     <div>
                       <div className="flex items-center space-x-2">
-                        <span className="font-bold text-white text-sm">{gate.name}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-slate-800 text-slate-300">
-                          {gate.milestone}
-                        </span>
+                        <span className="font-bold text-white text-xs">{gate.milestone}</span>
+                        <span className="text-slate-500">·</span>
+                        <span className="text-slate-300">{gate.name}</span>
                       </div>
-                      <span className="text-xs text-slate-400 block mt-0.5">{gate.algorithm}</span>
+                      <div className="flex items-center space-x-3 text-[11px] text-slate-400 mt-1">
+                        <span className="text-cyan-400/80">{gate.category}</span>
+                        <span>•</span>
+                        <span>{gate.testCount} Cases</span>
+                        <span>•</span>
+                        <span>{gate.avgRuntimeMs}ms Latency</span>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-emerald-950/60 border border-emerald-800/80 text-[11px] font-mono text-emerald-400">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>{gate.passedCount}/{gate.testCount} PASS</span>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      id={`btn-run-gate-${gate.gateNumber}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRunSingleGate(gate.gateNumber);
+                      }}
+                      disabled={runningGateIdx !== null}
+                      className="flex items-center space-x-1 px-2.5 py-1 rounded bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-800 text-[11px] font-medium transition cursor-pointer active:scale-95 disabled:opacity-50"
+                    >
+                      {runningGateIdx === gate.gateNumber ? (
+                        <RefreshCw className="w-3 h-3 animate-spin text-cyan-400" />
+                      ) : (
+                        <Play className="w-3 h-3 text-cyan-400" />
+                      )}
+                      <span>Run on NPU</span>
+                    </button>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
+                      PASS
+                    </span>
                   </div>
                 </div>
-
-                <p className="text-xs text-slate-400 mt-2.5 line-clamp-2">{gate.description}</p>
-
-                <div className="grid grid-cols-4 gap-2 mt-3 pt-3 border-t border-slate-800/60 text-[11px] font-mono text-slate-400">
-                  <div>
-                    <span className="text-slate-500 block text-[9px]">Text Size</span>
-                    <span className="text-slate-200 font-semibold">{(gate.textMemoryBytes / 1024).toFixed(1)} KiB</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block text-[9px]">Tile RAM</span>
-                    <span className="text-slate-200 font-semibold">{(gate.tileRamBytes / 1024).toFixed(1)} KiB</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block text-[9px]">DMAs</span>
-                    <span className="text-slate-200 font-semibold">{gate.dmaChannels} Ch</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block text-[9px]">AIE2 Tiles</span>
-                    <span className="text-cyan-400 font-semibold">{gate.tilesUsed} Core{gate.tilesUsed > 1 ? 's' : ''}</span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
 
-        {/* Right: Selected Gate Microarchitecture Details */}
+        {/* Selected Gate Inspector (1 Col) */}
         {activeGate && (
-          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-5 space-y-5 h-fit sticky top-24">
+          <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4 flex flex-col justify-between">
             <div>
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] px-2 py-0.5 rounded font-mono bg-cyan-950 text-cyan-300 border border-cyan-800">
-                  Gate {activeGate.gateNumber} · {activeGate.milestone}
-                </span>
-                <span className="text-xs font-mono text-emerald-400 font-bold flex items-center space-x-1">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Certified Silicon</span>
-                </span>
-              </div>
-              <h3 className="text-base font-bold text-white mt-2">{activeGate.name}</h3>
-              <p className="text-xs text-slate-400 mt-1">{activeGate.description}</p>
-            </div>
-
-            {/* Hardware Invariants Enforced */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-mono font-semibold text-slate-300 uppercase tracking-wider">
-                Silicon Invariants Enforced
-              </h4>
-
-              <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-2 text-xs font-mono">
-                <div className="flex items-center justify-between text-slate-300">
-                  <span className="text-slate-400">Zero Host Cryptographic Fallback</span>
-                  <span className="text-emerald-400 font-bold">STRICT (100% On-Chip)</span>
-                </div>
-                <div className="flex items-center justify-between text-slate-300">
-                  <span className="text-slate-400">Instruction .text Budget</span>
-                  <span className={activeGate.textMemoryBytes < 16384 ? 'text-emerald-400 font-bold' : 'text-rose-400'}>
-                    {(activeGate.textMemoryBytes / 1024).toFixed(1)} KiB / 16 KiB Max
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-slate-300">
-                  <span className="text-slate-400">Local Tile RAM Budget</span>
-                  <span className={activeGate.tileRamBytes < 65536 ? 'text-emerald-400 font-bold' : 'text-rose-400'}>
-                    {(activeGate.tileRamBytes / 1024).toFixed(1)} KiB / 64 KiB Max
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-slate-300">
-                  <span className="text-slate-400">DMA Ingress Channels</span>
-                  <span className="text-cyan-400 font-bold">{activeGate.dmaChannels} / 2 Channels</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Point-to-Point ObjectFIFOs */}
-            <div>
-              <h4 className="text-xs font-mono font-semibold text-slate-300 uppercase tracking-wider mb-2">
-                Point-to-Point ObjectFIFOs
-              </h4>
-              <div className="space-y-1.5">
-                {activeGate.objectFifos.map((fifo, idx) => (
-                  <div
-                    key={fifo}
-                    className="flex items-center space-x-2 bg-slate-950 px-3 py-2 rounded-lg border border-slate-800 font-mono text-xs text-slate-300"
-                  >
-                    <span className="text-[10px] text-cyan-400">0{idx + 1}</span>
-                    <ArrowRight className="w-3 h-3 text-slate-500" />
-                    <span>{fifo}</span>
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center space-x-2">
+                  <div className="w-7 h-7 rounded-lg bg-cyan-950 text-cyan-400 border border-cyan-800 flex items-center justify-center font-bold text-xs">
+                    {activeGate.gateNumber}
                   </div>
-                ))}
+                  <div>
+                    <h3 className="font-bold text-white text-sm">{activeGate.milestone}</h3>
+                    <span className="text-[10px] text-cyan-400 font-mono">{activeGate.category}</span>
+                  </div>
+                </div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800 font-mono">
+                  {activeGate.status}
+                </span>
+              </div>
+
+              <div className="mt-3 space-y-3 font-mono text-xs">
+                <div>
+                  <span className="text-slate-500 block text-[10px]">Kernel / Algorithm</span>
+                  <span className="text-white font-bold">{activeGate.algorithm}</span>
+                </div>
+                <p className="text-xs text-slate-300 font-sans leading-relaxed">
+                  {activeGate.description}
+                </p>
+
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800">
+                  <div className="bg-slate-950 p-2.5 rounded border border-slate-800">
+                    <span className="text-slate-500 block text-[10px]">NIST ACVP Cases</span>
+                    <span className="text-emerald-400 font-bold">{activeGate.passedCount} / {activeGate.testCount}</span>
+                  </div>
+                  <div className="bg-slate-950 p-2.5 rounded border border-slate-800">
+                    <span className="text-slate-500 block text-[10px]">Avg Silicon Latency</span>
+                    <span className="text-cyan-300 font-bold">{activeGate.avgRuntimeMs} ms</span>
+                  </div>
+                  <div className="bg-slate-950 p-2.5 rounded border border-slate-800">
+                    <span className="text-slate-500 block text-[10px]">Tile RAM Budget</span>
+                    <span className="text-slate-200 font-bold">{(activeGate.tileRamBytes / 1024).toFixed(1)} KiB (&lt;64K)</span>
+                  </div>
+                  <div className="bg-slate-950 p-2.5 rounded border border-slate-800">
+                    <span className="text-slate-500 block text-[10px]">Instruction Memory</span>
+                    <span className="text-slate-200 font-bold">{(activeGate.textMemoryBytes / 1024).toFixed(1)} KiB (&lt;16K)</span>
+                  </div>
+                </div>
+
+                <div className="bg-slate-950 p-2.5 rounded border border-slate-800 space-y-1">
+                  <span className="text-slate-500 block text-[10px]">AIE2 Ingress Constraints</span>
+                  <div className="text-slate-300 text-[11px] flex items-center justify-between">
+                    <span>DMA Channels: {activeGate.dmaChannels}</span>
+                    <span>Zero Fallback: TRUE</span>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Silicon Validation Performance */}
-            <div className="p-3 bg-cyan-950/20 border border-cyan-900/50 rounded-lg text-xs font-mono space-y-1.5">
-              <div className="flex items-center justify-between text-cyan-300 font-semibold">
-                <span>Silicon Test Verification</span>
-                <span>{activeGate.passedCount} / {activeGate.testCount} PASS</span>
-              </div>
-              <p className="text-[11px] text-slate-400">
-                Average execution time: {activeGate.avgRuntimeMs} ms on AIE2 physical array.
-              </p>
-            </div>
+            <button
+              id="btn-dispatch-active-gate"
+              onClick={() => handleRunSingleGate(activeGate.gateNumber)}
+              disabled={runningGateIdx !== null}
+              className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs font-semibold transition cursor-pointer shadow-md shadow-cyan-600/30 active:scale-98 disabled:opacity-50"
+            >
+              {runningGateIdx === activeGate.gateNumber ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Executing Gate on NPU...</span>
+                </>
+              ) : (
+                <>
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>Dispatch Gate {activeGate.gateNumber} to Physical NPU</span>
+                </>
+              )}
+            </button>
           </div>
         )}
       </div>
+
+      {/* Live Single Gate Execution Drawer */}
+      {isDrawerOpen && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-2xl font-mono text-xs space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div className="flex items-center space-x-2">
+              <Terminal className="w-4 h-4 text-cyan-400" />
+              <span className="font-bold text-white">Live Physical NPU Execution Log</span>
+            </div>
+            <button
+              onClick={() => setIsDrawerOpen(false)}
+              className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="bg-slate-950 p-4 rounded-lg border border-slate-800 max-h-60 overflow-y-auto space-y-1 text-slate-300">
+            {gateLogs.map((log, idx) => (
+              <div
+                key={idx}
+                className={
+                  log.includes('[PASS]') || log.includes('PASS')
+                    ? 'text-emerald-400 font-semibold'
+                    : log.includes('[ERROR]')
+                    ? 'text-rose-400 font-bold'
+                    : log.includes('[DISPATCHING')
+                    ? 'text-cyan-300 font-bold'
+                    : 'text-slate-400'
+                }
+              >
+                {log}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
