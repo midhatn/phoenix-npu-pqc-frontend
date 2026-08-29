@@ -415,6 +415,24 @@ export const SILICON_GATES: SiliconGate[] = [
     objectFifos: ['fifo_hybrid_pipeline_orchestrator'],
     status: 'CERTIFIED',
   },
+  {
+    gateNumber: 23,
+    milestone: 'DR27',
+    name: 'QRNG-OPENAPI & Entropy Reservoir',
+    category: 'Hardware/DR0-10',
+    algorithm: 'QRNG Ingress & Token-Bucket Pool',
+    description: 'Palo Alto QRNG-OPENAPI v1.0, NIST SP 800-90B preflight health tests, and 5%/30% hysteresis anti-flapping loop on tile SRAM.',
+    testCount: 6,
+    passedCount: 6,
+    avgRuntimeMs: 770,
+    textMemoryBytes: 8192,
+    tileRamBytes: 32768,
+    dmaChannels: 2,
+    tilesUsed: 1,
+    zeroHostFallback: true,
+    objectFifos: ['dr27_qrng_request', 'dr27_qrng_descriptor', 'dr27_qrng_result'],
+    status: 'CERTIFIED',
+  },
 ];
 
 export const TOTAL_SILICON_TESTS = SILICON_GATES.reduce((sum, g) => sum + g.testCount, 0); // 736

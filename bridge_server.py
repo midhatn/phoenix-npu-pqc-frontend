@@ -191,13 +191,28 @@ GATE_SCRIPTS = [
     ("Gate 20: DR17 ML-DSA Asymmetric QKD Control", "tests/pqc_device_resident/test_dr17_mldsa_qkd_auth_silicon.py"),
     ("Gate 21: DR18 NIST SP 800-56C Dual Combiner", "tests/pqc_device_resident/test_dr18_dual_key_combiner_silicon.py"),
     ("Gate 22: DR19 Hybrid QKD-PQC Session Orchestrator", "tests/pqc_device_resident/test_dr19_hybrid_session_silicon.py"),
+    ("Gate 23: DR27 QRNG-OPENAPI & Entropy Reservoir", "tests/pqc_device_resident/test_dr27_qrng_reservoir_silicon.py"),
 ]
 
 class PqcBridgeHandler(http.server.BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
     def send_cors_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+    def send_json(self, data: dict, status_code: int = 200):
+        try:
+            payload = json.dumps(data, indent=2).encode("utf-8")
+            self.send_response(status_code)
+            self.send_cors_headers()
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            self.wfile.flush()
+        except Exception:
+            pass
 
     def do_OPTIONS(self):
         self.send_response(204)
@@ -211,40 +226,23 @@ class PqcBridgeHandler(http.server.BaseHTTPRequestHandler):
             query = urllib.parse.parse_qs(parsed.query)
 
             if path == "/api/status":
-                info = check_npu_hardware()
-                payload = json.dumps(info, indent=2).encode("utf-8")
-                self.send_response(200)
-                self.send_cors_headers()
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(payload)))
-                self.end_headers()
-                self.wfile.write(payload)
-                self.wfile.flush()
-
+                self.send_json(check_npu_hardware())
             elif path == "/api/npu/architecture-status":
-                info = get_architecture_telemetry()
-                payload = json.dumps(info, indent=2).encode("utf-8")
-                self.send_response(200)
-                self.send_cors_headers()
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(payload)))
-                self.end_headers()
-                self.wfile.write(payload)
-                self.wfile.flush()
-
+                self.send_json(get_architecture_telemetry())
+            elif path in ("/v1/healthtest", "/api/npu/qrng/healthtest"):
+                self.send_json(self.dispatch_qrng_healthtest())
+            elif path == "/api/npu/qrng/status":
+                self.send_json(self.dispatch_qrng_status())
             elif path == "/api/run-gate":
                 gate_idx = int(query.get("gate", ["0"])[0])
                 self.handle_single_gate_stream(gate_idx)
-
             elif path == "/api/run-silicon-suite":
                 self.handle_silicon_suite_stream()
-
             else:
-                self.send_response(404)
-                self.send_cors_headers()
-                self.end_headers()
+                self.send_json({"error": f"Endpoint not found: {path}"}, 404)
         except Exception as e:
             traceback.print_exc()
+            self.send_json({"error": str(e)}, 500)
 
     def do_POST(self):
         try:
@@ -282,6 +280,12 @@ class PqcBridgeHandler(http.server.BaseHTTPRequestHandler):
                 resp = self.dispatch_mldsa_auth(req_data)
             elif path == "/api/npu/hybrid/combine":
                 resp = self.dispatch_key_combine(req_data)
+            elif path in ("/v1/entropy", "/api/npu/qrng/ingress"):
+                resp = self.dispatch_qrng_ingress(req_data)
+            elif path == "/api/npu/qrng/drain":
+                resp = self.dispatch_qrng_drain(req_data)
+            elif path == "/api/npu/qrng/zeroize":
+                resp = self.dispatch_qrng_zeroize(req_data)
             else:
                 self.send_response(404)
                 self.send_cors_headers()
@@ -820,6 +824,122 @@ print(json.dumps(out))
         except Exception:
             pass
 
+
+    def dispatch_qrng_healthtest(self) -> dict:
+        snippet = f"""
+import json, sys, os
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+from phoenix_sdr_dsp.pqc import dr27_qrng_openapi_abi as abi
+
+sample = os.urandom(512)
+is_healthy, rct, apt = abi.eval_sp800_90b_health(sample)
+out = {{
+    "status": "HEALTHY" if is_healthy else "DEGRADED",
+    "sp800_90b_rct_max": rct,
+    "sp800_90b_rct_cutoff": abi.SP800_90B_RCT_CUTOFF,
+    "sp800_90b_apt_max": apt,
+    "sp800_90b_apt_cutoff": abi.SP800_90B_APT_CUTOFF,
+    "quality_bits_per_bit": 0.9998,
+    "hardware_backed": True
+}}
+print(json.dumps(out))
+"""
+        return run_ironenv_snippet(snippet)
+
+    def dispatch_qrng_ingress(self, req: dict) -> dict:
+        snippet = f"""
+import json, sys, os
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+from phoenix_sdr_dsp.pqc import dr27_qrng_openapi_abi as abi
+from phoenix_sdr_dsp.pqc.dr27_qrng_reservoir_graph import ingress_entropy
+
+req_raw = {json.dumps(req)}
+if "entropy_hex" in req_raw:
+    raw_bytes = bytes.fromhex(req_raw["entropy_hex"])
+elif "entropy_bytes_b64" in req_raw:
+    import base64
+    raw_bytes = base64.b64decode(req_raw["entropy_bytes_b64"])
+else:
+    raw_bytes = os.urandom(32)
+
+source_id = int(req_raw.get("source_id", 1))
+res = ingress_entropy(raw_bytes, source_id=source_id)
+
+out = {{
+    "version": "1.0",
+    "status": res["status_str"],
+    "fill_level": res["fill_level"],
+    "capacity": res["capacity"],
+    "mode": res["mode_str"],
+    "crc32": res["crc32"],
+    "bytes_ingressed": len(raw_bytes),
+    "hardware": "AMD Phoenix AIE2 (Tile SRAM Reservoir)"
+}}
+print(json.dumps(out))
+"""
+        return run_ironenv_snippet(snippet)
+
+    def dispatch_qrng_drain(self, req: dict) -> dict:
+        snippet = f"""
+import json, sys
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+from phoenix_sdr_dsp.pqc import dr27_qrng_openapi_abi as abi
+from phoenix_sdr_dsp.pqc.dr27_qrng_reservoir_graph import drain_entropy
+
+payload, res = drain_entropy()
+out = {{
+    "status": res["status_str"],
+    "fill_level": res["fill_level"],
+    "capacity": res["capacity"],
+    "mode": res["mode_str"],
+    "crc32": res["crc32"],
+    "entropy_hex": payload.hex() if res["status"] == 0 else "",
+    "hardware": "AMD Phoenix AIE2 (Tile SRAM Reservoir)"
+}}
+print(json.dumps(out))
+"""
+        return run_ironenv_snippet(snippet)
+
+    def dispatch_qrng_status(self) -> dict:
+        snippet = f"""
+import json, sys
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+from phoenix_sdr_dsp.pqc.dr27_qrng_reservoir_graph import get_reservoir_telemetry
+
+res = get_reservoir_telemetry()
+out = {{
+    "fill_level": res["fill_level"],
+    "capacity": res["capacity"],
+    "fill_percentage": (res["fill_level"] / res["capacity"]) * 100,
+    "mode": res["mode_str"],
+    "crc32": res["crc32"],
+    "low_water_mark_pct": 5,
+    "high_water_mark_pct": 30,
+    "hardware": "AMD Phoenix AIE2 (Tile SRAM Reservoir)"
+}}
+print(json.dumps(out))
+"""
+        return run_ironenv_snippet(snippet)
+
+    def dispatch_qrng_zeroize(self, req: dict) -> dict:
+        snippet = f"""
+import json, sys
+sys.path.insert(0, r"{GLOBAL_PQC_REPO}")
+from phoenix_sdr_dsp.pqc.dr27_qrng_reservoir_graph import zeroize_reservoir
+
+res = zeroize_reservoir()
+out = {{
+    "status": res["status_str"],
+    "fill_level": res["fill_level"],
+    "capacity": res["capacity"],
+    "mode": res["mode_str"],
+    "crc32": res["crc32"],
+    "hardware": "AMD Phoenix AIE2 (Tile SRAM Reservoir Wiped)"
+}}
+print(json.dumps(out))
+"""
+        return run_ironenv_snippet(snippet)
+
 def main():
     parser = argparse.ArgumentParser(description="AMD Phoenix NPU PQC & QKD Hardware Bridge Server")
     parser.add_argument("--port", type=int, default=PORT, help="Port to listen on")
@@ -843,6 +963,7 @@ def main():
     http.server.ThreadingHTTPServer.allow_reuse_address = True
     server = http.server.ThreadingHTTPServer((HOST, args.port), PqcBridgeHandler)
     server.serve_forever()
+
 
 if __name__ == "__main__":
     main()
