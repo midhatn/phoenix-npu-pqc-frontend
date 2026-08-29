@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Cpu, ShieldCheck, Key, FileSignature, Hash, Terminal, Server, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Cpu, ShieldCheck, Key, FileSignature, Hash, Terminal, Server, ChevronLeft, ChevronRight } from 'lucide-react';
 import { PqcStandard } from '../types';
 
 interface NavbarProps {
@@ -10,6 +10,9 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenTestRunner }) => {
   const [isBridgeOnline, setIsBridgeOnline] = useState<boolean>(false);
+  const [showLeftArrow, setShowLeftArrow] = useState<boolean>(false);
+  const [showRightArrow, setShowRightArrow] = useState<boolean>(true);
+  const navScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const checkBridge = async () => {
@@ -29,6 +32,35 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenT
     const interval = setInterval(checkBridge, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  const checkScroll = () => {
+    if (navScrollRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = navScrollRef.current;
+      setShowLeftArrow(scrollLeft > 10);
+      setShowRightArrow(scrollLeft < scrollWidth - clientWidth - 10);
+    }
+  };
+
+  useEffect(() => {
+    checkScroll();
+    window.addEventListener('resize', checkScroll);
+    return () => window.removeEventListener('resize', checkScroll);
+  }, []);
+
+  const scrollNav = (direction: 'left' | 'right') => {
+    if (navScrollRef.current) {
+      const offset = direction === 'left' ? -250 : 250;
+      navScrollRef.current.scrollBy({ left: offset, behavior: 'smooth' });
+      setTimeout(checkScroll, 300);
+    }
+  };
+
+  const handleWheelScroll = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (navScrollRef.current && e.deltaY !== 0) {
+      navScrollRef.current.scrollBy({ left: e.deltaY * 1.5, behavior: 'auto' });
+      checkScroll();
+    }
+  };
 
   const tabs = [
     { id: 'fips203' as PqcStandard, label: 'ML-KEM (FIPS 203)', icon: Key, badge: 'Key Encapsulation' },
@@ -92,39 +124,73 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenT
           </div>
         </div>
 
-        {/* Tab Navigation */}
-        <nav className="flex space-x-1 overflow-x-auto py-2 scrollbar-none border-t border-slate-900">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = currentTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                id={`tab-${tab.id}`}
-                onClick={() => onSelectTab(tab.id)}
-                className={`flex items-center space-x-2 px-3.5 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap cursor-pointer ${
-                  isActive
-                    ? 'bg-slate-800 text-cyan-400 shadow-sm border border-slate-700'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/80'
-                }`}
-              >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-cyan-400' : 'text-slate-400'}`} />
-                <span>{tab.label}</span>
-                {tab.badge && (
-                  <span
-                    className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
-                      isActive
-                        ? 'bg-cyan-950 text-cyan-300 border border-cyan-800/50'
-                        : 'bg-slate-900 text-slate-400'
-                    }`}
-                  >
-                    {tab.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </nav>
+        {/* Tab Navigation with Scroll Controls */}
+        <div className="relative border-t border-slate-900 flex items-center">
+          {/* Scroll Left Button */}
+          {showLeftArrow && (
+            <button
+              onClick={() => scrollNav('left')}
+              className="absolute left-0 z-10 p-1.5 bg-slate-900/90 hover:bg-slate-800 border border-slate-700 rounded-md text-cyan-400 shadow-lg cursor-pointer transition-all hover:scale-105"
+              title="Scroll Tabs Left"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+          )}
+
+          {/* Scrollable Tabs Track */}
+          <nav
+            ref={navScrollRef}
+            onScroll={checkScroll}
+            onWheel={handleWheelScroll}
+            className="flex space-x-1.5 overflow-x-auto py-2.5 scroll-smooth w-full select-none"
+            style={{
+              scrollbarWidth: 'thin',
+              scrollbarColor: '#0891b2 #0f172a',
+            }}
+          >
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = currentTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  id={`tab-${tab.id}`}
+                  onClick={() => onSelectTab(tab.id)}
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap cursor-pointer flex-shrink-0 ${
+                    isActive
+                      ? 'bg-slate-800 text-cyan-400 shadow-md border border-slate-700 font-semibold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/80'
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-cyan-400' : 'text-slate-400'}`} />
+                  <span>{tab.label}</span>
+                  {tab.badge && (
+                    <span
+                      className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                        isActive
+                          ? 'bg-cyan-950 text-cyan-300 border border-cyan-800/50'
+                          : 'bg-slate-900 text-slate-400'
+                      }`}
+                    >
+                      {tab.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Scroll Right Button */}
+          {showRightArrow && (
+            <button
+              onClick={() => scrollNav('right')}
+              className="absolute right-0 z-10 p-1.5 bg-slate-900/90 hover:bg-slate-800 border border-slate-700 rounded-md text-cyan-400 shadow-lg cursor-pointer transition-all hover:scale-105"
+              title="Scroll Tabs Right"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
     </header>
   );
