@@ -1,7 +1,7 @@
 {
   "name": "phoenix-npu-pqc-frontend",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -24,5 +24,33 @@
     "tailwindcss": "^4.0.0",
     "typescript": "~5.7.2",
     "vite": "^6.2.0"
+  },
+  "description": "Interactive Web Dashboard & Real-Time Hardware Runner for 100% On-Device Post-Quantum Cryptography & Hybrid QKD on AMD Phoenix NPU (AIE2 / XDNA1)",
+  "keywords": [
+    "post-quantum-cryptography",
+    "pqc",
+    "qkd",
+    "quantum-key-distribution",
+    "etsi-qkd-014",
+    "id-quantique",
+    "nist-sp-800-56c",
+    "amd-phoenix",
+    "npu",
+    "aie2",
+    "xdna1",
+    "fips-202",
+    "fips-203",
+    "fips-204",
+    "ml-kem",
+    "ml-dsa",
+    "react-19",
+    "vite-6",
+    "tailwind-css"
+  ],
+  "author": "Midhat Nashar",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/midhatn/phoenix-npu-pqc-frontend.git"
   }
 }

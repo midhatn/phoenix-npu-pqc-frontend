@@ -3,6 +3,7 @@ message: "If you use this software in your research or application, please cite 
 authors:
   - family-names: "Nashar"
     given-names: "Midhat"
+    alias: "midhatn"
 title: "Phoenix NPU PQC Frontend: Interactive Web Dashboard & Hardware Playground for AMD Phoenix NPU (AIE2 / XDNA1)"
 version: 1.1.0
 doi: 10.5281/zenodo.22162273
@@ -12,7 +13,13 @@ repository-code: "https://github.com/midhatn/phoenix-npu-pqc-frontend"
 license: "Apache-2.0"
 keywords:
   - "post-quantum-cryptography"
+  - "pqc"
   - "quantum-key-distribution"
+  - "qkd"
+  - "ETSI GS QKD 014"
+  - "ID Quantique"
+  - "NIST SP 800-56C"
+  - "defense-in-depth"
   - "amd-phoenix"
   - "npu"
   - "aie2"
@@ -22,3 +29,5 @@ keywords:
   - "fips-202"
   - "fips-203"
   - "fips-204"
+  - "ml-kem"
+  - "ml-dsa"
